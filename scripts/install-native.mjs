@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
- * Makes better-sqlite3 loadable inside Electron.
+ * Makes Electron and better-sqlite3 ready to run.
  *
+ * 0. Make sure Electron's own binary was downloaded.
  * 1. Try the official prebuilt binary for the installed Electron's ABI
  *    (downloaded from the better-sqlite3 GitHub release — no compiler needed).
  * 2. Fall back to compiling against Electron's headers with @electron/rebuild.
@@ -22,6 +23,15 @@ const binary = join(sqliteDir, 'build', 'Release', 'better_sqlite3.node');
 function run(cmd, args, cwd) {
   const r = spawnSync(cmd, args, { cwd, stdio: 'inherit', env: process.env });
   return r.status === 0;
+}
+
+// Some npm versions skip dependencies' own install scripts, which leaves
+// Electron without its binary ("Electron uninstall"). Its installer is a no-op
+// when the binary is already present, so always run it.
+console.log(`[native] ensuring Electron ${electronVersion} binary is installed`);
+if (!run(process.execPath, [require.resolve('electron/install.js')], dirname(require.resolve('electron/package.json')))) {
+  console.error('[native] Electron download failed. Check your connection and run: npm run rebuild:native');
+  process.exit(1);
 }
 
 const prebuildBin = require.resolve('prebuild-install/bin.js', { paths: [sqliteDir] });
