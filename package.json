@@ -7,6 +7,10 @@
   "main": "./out/main/index.js",
   "author": "Clubhouse",
   "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cutzbyheim-lab/clubhouse.git"
+  },
   "scripts": {
     "dev": "electron-vite dev",
     "build": "npm run typecheck && electron-vite build",
@@ -61,6 +65,8 @@
     },
     "publish": {
       "provider": "github",
+      "owner": "cutzbyheim-lab",
+      "repo": "clubhouse",
       "releaseType": "release"
     }
   },

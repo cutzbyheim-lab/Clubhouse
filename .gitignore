@@ -6,4 +6,3 @@ dist/
 *.db-shm
 .DS_Store
 *.tsbuildinfo
-dist/
