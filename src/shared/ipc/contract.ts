@@ -31,9 +31,27 @@ export const DbHealth = z.object({
   appliedMigrations: z.array(z.object({ id: z.number().int(), name: z.string(), appliedAt: z.string() })),
 });
 
+const Counts = z.object({
+  clubs: z.number().int(),
+  bags: z.number().int(),
+  courses: z.number().int(),
+  rounds: z.number().int(),
+  sessions: z.number().int(),
+  shots: z.number().int(),
+  practicePlans: z.number().int(),
+  practiceLogs: z.number().int(),
+});
+export type Counts = z.infer<typeof Counts>;
+
+export const DataSummary = z.object({ own: Counts, sample: Counts, hasSample: z.boolean(), hasOwn: z.boolean() });
+export type DataSummary = z.infer<typeof DataSummary>;
+
 export const contract = {
   'app.info': { input: Empty, output: AppInfo },
   'db.health': { input: Empty, output: DbHealth },
+  'data.summary': { input: Empty, output: DataSummary },
+  'data.loadSample': { input: Empty, output: DataSummary },
+  'data.clearSample': { input: Empty, output: z.object({ removed: Counts, kept: Counts, summary: DataSummary }) },
 } as const satisfies Record<string, { input: z.ZodType; output: z.ZodType }>;
 
 export type Contract = typeof contract;

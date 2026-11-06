@@ -2,6 +2,7 @@ import { app, BrowserWindow, dialog } from 'electron';
 import { closeDatabase, initDatabase } from './db/connection';
 import { migrations } from './db/migrations';
 import { migrate } from './db/migrator';
+import { ensureBuiltinDrills } from './db/seed/drills';
 import { setupIpc } from './ipc';
 import { backupsDir, dbPath } from './paths';
 import { createMainWindow } from './window';
@@ -10,6 +11,7 @@ function bootDatabase(): void {
   const file = dbPath();
   const db = initDatabase(file);
   const report = migrate(db, migrations, { dbFile: file, backupDir: backupsDir() });
+  ensureBuiltinDrills(db);
   console.info(`[db] ${file} at schema v${report.schemaVersion}`);
   if (report.backupPath) console.info(`[db] pre-migration backup: ${report.backupPath}`);
 }

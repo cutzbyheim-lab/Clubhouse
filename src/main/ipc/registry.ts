@@ -8,6 +8,7 @@ import {
   type ChannelOutput,
 } from '@shared/ipc/contract';
 import { fail, ok, type Result } from '@shared/ipc/result';
+import { DomainError } from '../errors';
 
 type Input<C extends Channel> = z.output<(typeof contract)[C]['input']>;
 type Handler<C extends Channel> = (input: Input<C>) => ChannelOutput<C> | Promise<ChannelOutput<C>>;
@@ -47,17 +48,6 @@ export async function dispatch(channel: unknown, payload: unknown): Promise<Resu
     const isSqlite = err instanceof Error && err.name === 'SqliteError';
     console.error(`[ipc] ${channel} failed:`, err);
     return fail(isSqlite ? 'DATABASE' : 'INTERNAL', message);
-  }
-}
-
-/** Throw from services for expected, user-facing failures. */
-export class DomainError extends Error {
-  override readonly name = 'DomainError';
-  constructor(
-    readonly code: 'NOT_FOUND' | 'CONFLICT' | 'VALIDATION',
-    message: string,
-  ) {
-    super(message);
   }
 }
 
