@@ -5,7 +5,11 @@ import { migrate } from './db/migrator';
 import { ensureBuiltinDrills } from './db/seed/drills';
 import { setupIpc } from './ipc';
 import { backupsDir, dbPath } from './paths';
+import { startUpdater } from './updater';
 import { createMainWindow } from './window';
+
+// Matches build.appId so Windows groups the taskbar icon and installer correctly.
+if (process.platform === 'win32') app.setAppUserModelId('com.clubhouse.desktop');
 
 function bootDatabase(): void {
   const file = dbPath();
@@ -38,6 +42,7 @@ if (!app.requestSingleInstanceLock()) {
     }
     setupIpc();
     createMainWindow();
+    startUpdater();
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createMainWindow();

@@ -67,8 +67,20 @@ export type Counts = z.infer<typeof Counts>;
 export const DataSummary = z.object({ own: Counts, sample: Counts, hasSample: z.boolean(), hasOwn: z.boolean() });
 export type DataSummary = z.infer<typeof DataSummary>;
 
+export const UpdateStatus = z.object({
+  state: z.enum(['disabled', 'idle', 'checking', 'current', 'downloading', 'ready', 'error']),
+  currentVersion: z.string(),
+  availableVersion: z.string().optional(),
+  percent: z.number().optional(),
+  message: z.string().optional(),
+});
+export type UpdateStatus = z.infer<typeof UpdateStatus>;
+
 export const contract = {
   'app.info': { input: Empty, output: AppInfo },
+  'app.updateStatus': { input: Empty, output: UpdateStatus },
+  'app.checkForUpdates': { input: Empty, output: UpdateStatus },
+  'app.installUpdate': { input: Empty, output: Ok },
   'db.health': { input: Empty, output: DbHealth },
 
   'data.summary': { input: Empty, output: DataSummary },

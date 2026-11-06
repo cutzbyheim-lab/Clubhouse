@@ -1,7 +1,7 @@
 {
   "name": "clubhouse",
   "productName": "Clubhouse",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "description": "Premium desktop golf intelligence platform",
   "private": true,
   "main": "./out/main/index.js",
@@ -14,13 +14,59 @@
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
-    "test": "ELECTRON_RUN_AS_NODE=1 electron node_modules/vitest/vitest.mjs run",
-    "test:watch": "ELECTRON_RUN_AS_NODE=1 electron node_modules/vitest/vitest.mjs",
+    "test": "node scripts/test.mjs run",
+    "test:watch": "node scripts/test.mjs",
+    "dist:win": "npm run build && electron-builder --win --publish never",
+    "dist:linux": "npm run build && electron-builder --linux dir --publish never",
     "rebuild:native": "node scripts/install-native.mjs",
     "postinstall": "node scripts/install-native.mjs"
   },
+  "build": {
+    "appId": "com.clubhouse.desktop",
+    "productName": "Clubhouse",
+    "copyright": "Clubhouse",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "node_modules/better-sqlite3/**"
+    ],
+    "npmRebuild": false,
+    "icon": "build/icon.png",
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "Clubhouse-Setup-${version}.${ext}",
+      "shortcutName": "Clubhouse"
+    },
+    "linux": {
+      "target": "dir",
+      "category": "Sports"
+    },
+    "publish": {
+      "provider": "github",
+      "releaseType": "release"
+    }
+  },
   "dependencies": {
-    "better-sqlite3": "12.11.1"
+    "better-sqlite3": "12.11.1",
+    "electron-updater": "^6.8.11"
   },
   "devDependencies": {
     "@electron/rebuild": "^4.2.1",
@@ -34,6 +80,7 @@
     "@types/three": "^0.187.0",
     "@vitejs/plugin-react": "^6.2.1",
     "electron": "~42.11.18",
+    "electron-builder": "^26.18.0",
     "electron-vite": "^6.0.0",
     "lucide-react": "^1.69.0",
     "react": "^19.3.1",

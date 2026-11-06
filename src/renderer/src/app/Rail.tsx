@@ -4,6 +4,7 @@ import { Segmented } from '@/design/controls';
 import { useProfile } from '@/stores/profile';
 import { useUi } from '@/stores/ui';
 import { MODULE_GROUPS } from './module';
+import { UpdateBadge } from './UpdateBadge';
 import { modules } from './registry';
 
 /** Concentric green contours — the one decorative flourish in the chrome. */
@@ -91,6 +92,7 @@ export function Rail() {
         })}
       </div>
 
+      <UpdateBadge collapsed={collapsed} />
       {!collapsed && profile && (
         <div className="mx-3 mb-1 flex items-center justify-between border-t border-rule pt-3">
           <span className="text-xs text-ink-faint">Distances</span>

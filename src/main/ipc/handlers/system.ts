@@ -3,6 +3,7 @@ import { APP_NAME } from '@shared/constants';
 import { getDatabase } from '../../db/connection';
 import { listApplied } from '../../db/migrator';
 import { dbPath } from '../../paths';
+import { checkForUpdates, installUpdate, updateStatus } from '../../updater';
 import { handle } from '../registry';
 
 export function registerSystemHandlers(): void {
@@ -14,6 +15,13 @@ export function registerSystemHandlers(): void {
     chrome: process.versions.chrome ?? 'unknown',
     node: process.versions.node,
   }));
+
+  handle('app.updateStatus', () => updateStatus());
+  handle('app.checkForUpdates', () => checkForUpdates());
+  handle('app.installUpdate', () => {
+    installUpdate();
+    return { ok: true as const };
+  });
 
   handle('db.health', () => {
     const db = getDatabase();
