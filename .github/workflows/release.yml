@@ -1,9 +1,9 @@
 name: Release
 
-# Every push to main checks package.json's version. If no GitHub Release
-# exists for it yet, this builds the Windows installer, runs the tests and
-# publishes the release (creating tag vX.Y.Z). Installed copies of Clubhouse
-# check these releases and update themselves.
+# Every push to main checks package.json's version. If no complete GitHub
+# Release exists for it yet, this builds the Windows installer, runs the
+# tests and publishes release vX.Y.Z. Installed copies of Clubhouse check
+# these releases and update themselves.
 #
 # To ship an update: bump "version" in package.json and push to main.
 
@@ -22,30 +22,41 @@ concurrency:
 jobs:
   windows:
     runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v5
 
+      # A release is complete when it's published and carries latest.yml (what
+      # the updater reads). Anything else for this version is a leftover from a
+      # failed or racing publish and is removed.
       - name: Is this version already released?
         id: version
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           v="v$(node -p "require('./package.json').version")"
           echo "tag=$v" >> "$GITHUB_OUTPUT"
-          if gh release view "$v" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' > assets.txt 2>/dev/null; then
-            if grep -qx 'latest.yml' assets.txt; then
-              echo "Release $v already exists; nothing to do."
-              echo "release=false" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-            # A release without latest.yml is a half-finished publish: installed
-            # copies can't update from it. Remove it (and its tag) and rebuild.
-            echo "Release $v is incomplete; removing it to rebuild."
-            gh release delete "$v" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag
+          releases=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq "[.[] | select(.tag_name == \"$v\") | {id, draft, assets: [.assets[].name]}]")
+          good=$(echo "$releases" | jq -r '[.[] | select(.draft == false and (.assets | index("latest.yml")))][0].id // empty')
+          if [ -n "$good" ]; then
+            for id in $(echo "$releases" | jq -r ".[] | select(.id != $good) | .id"); do
+              echo "Removing stray release $id for $v"
+              gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/$id"
+            done
+            echo "Release $v already exists; nothing to build."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            for id in $(echo "$releases" | jq -r '.[].id'); do
+              echo "Removing incomplete release $id for $v"
+              gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/$id"
+            done
+            git push origin --delete "refs/tags/$v" 2>/dev/null || true
+            echo "Building release $v."
+            echo "release=true" >> "$GITHUB_OUTPUT"
           fi
-          echo "Building release $v."
-          echo "release=true" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-node@v5
         if: steps.version.outputs.release == 'true'
@@ -65,22 +76,23 @@ jobs:
         if: steps.version.outputs.release == 'true'
         run: npm run build
 
-      # GitHub only publishes a release for a tag that already exists.
-      - name: Tag this version
+      # One draft release up front, so every file lands in the same release.
+      - name: Tag and open a draft release
         if: steps.version.outputs.release == 'true'
-        shell: bash
         env:
           TAG: ${{ steps.version.outputs.tag }}
         run: |
-          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null; then
-            echo "Tag $TAG already exists."
-          else
-            git tag "$TAG"
-            git push origin "refs/tags/$TAG"
-          fi
+          git tag "$TAG"
+          git push origin "refs/tags/$TAG"
+          gh release create "$TAG" --draft --verify-tag --title "Clubhouse ${TAG#v}" \
+            --notes "Install with Clubhouse-Setup-${TAG#v}.exe. Installed copies update automatically."
 
-      - name: Package and publish
+      - name: Package and upload
         if: steps.version.outputs.release == 'true'
         run: npx electron-builder --win --publish always
+
+      - name: Publish the release
+        if: steps.version.outputs.release == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: gh release edit "$TAG" --draft=false --latest

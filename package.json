@@ -67,7 +67,7 @@
       "provider": "github",
       "owner": "cutzbyheim-lab",
       "repo": "Clubhouse",
-      "releaseType": "release"
+      "releaseType": "draft"
     }
   },
   "dependencies": {
