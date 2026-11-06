@@ -63,7 +63,7 @@ export function CourseEditor({ open, onClose, onCreated }: { open: boolean; onCl
       return;
     }
     setBusy(true);
-    const res = await mutate('courses.create', parsed.data);
+    const res = await mutate('courses.create', parsed.data, { done: (c) => `${c.name} added` });
     setBusy(false);
     if (!res.ok) return setServer(res.error);
     onCreated(res.data.id);

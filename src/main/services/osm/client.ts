@@ -15,7 +15,7 @@ export interface Http {
   getBuffer(url: string, timeoutMs: number): Promise<Uint8Array | null>;
 }
 
-const USER_AGENT = 'Clubhouse/0.6 (desktop golf app; https://github.com/cutzbyheim-lab/Clubhouse)';
+const USER_AGENT = 'Clubhouse/0.7 (desktop golf app; https://github.com/cutzbyheim-lab/Clubhouse)';
 
 export const NOMINATIM = 'https://nominatim.openstreetmap.org/search';
 export const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'] as const;

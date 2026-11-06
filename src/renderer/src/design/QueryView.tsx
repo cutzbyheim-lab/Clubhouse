@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import type { QueryState } from '@/lib/api';
 import { Panel } from './Page';
+import type { Art } from './Illustrations';
 import { EmptyState, ErrorState, LoadingState } from './StateViews';
 
 /** One place that turns a query into its loading / error / empty / ready view. */
@@ -13,7 +14,7 @@ export function QueryView<T>({
 }: {
   q: QueryState<T>;
   label: string;
-  empty?: { title: string; body: ReactNode; action?: ReactNode };
+  empty?: { title: string; body: ReactNode; action?: ReactNode; art?: Art };
   onRetry?: () => void;
   children: (data: T) => ReactNode;
 }) {
@@ -22,7 +23,7 @@ export function QueryView<T>({
   if (q.status === 'empty' && empty) {
     return (
       <Panel>
-        <EmptyState title={empty.title} action={empty.action}>
+        <EmptyState title={empty.title} action={empty.action} art={empty.art}>
           {empty.body}
         </EmptyState>
       </Panel>

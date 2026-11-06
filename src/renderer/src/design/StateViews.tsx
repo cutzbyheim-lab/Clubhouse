@@ -1,3 +1,4 @@
+import { Illustration, type Art } from './Illustrations';
 import type { ReactNode } from 'react';
 import type { AppError } from '@shared/ipc/result';
 
@@ -10,18 +11,24 @@ const ERROR_GUIDANCE: Record<AppError['code'], string> = {
   INTERNAL: 'Try again. If it keeps happening, restart Clubhouse.',
 };
 
-export function LoadingState({ label }: { label: string }) {
+/** Placeholder shaped like what's coming (a screen of figures and a panel, a block, or lines), shown while data loads. */
+export function LoadingState({ label, shape = 'page' }: { label: string; shape?: 'page' | 'block' | 'lines' }) {
   return (
-    <div role="status" aria-live="polite" className="flex flex-col gap-3 p-6">
+    <div role="status" aria-live="polite" className="flex h-full animate-fade-in flex-col gap-4 [animation-delay:120ms]">
       <span className="sr-only">{label}</span>
-      {[72, 54, 64].map((w) => (
-        <div
-          key={w}
-          className="h-3 animate-pulse rounded-full bg-raised"
-          style={{ width: `${w}%` }}
-          aria-hidden
-        />
-      ))}
+      {shape === 'page' && (
+        <>
+          <div className="grid grid-cols-4 gap-4" aria-hidden>
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="skeleton h-[92px] rounded-panel" />
+            ))}
+          </div>
+          <div className="skeleton h-[260px] rounded-panel" aria-hidden />
+        </>
+      )}
+      {shape === 'block' && <div className="skeleton min-h-[200px] flex-1 rounded-panel" aria-hidden />}
+      {shape === 'lines' &&
+        [72, 54, 64].map((w) => <div key={w} className="skeleton h-3 rounded-full" style={{ width: `${w}%` }} aria-hidden />)}
     </div>
   );
 }
@@ -30,13 +37,16 @@ export function EmptyState({
   title,
   children,
   action,
+  art,
 }: {
   title: string;
   children: ReactNode;
   action?: ReactNode;
+  art?: Art | undefined;
 }) {
   return (
-    <div className="flex max-w-[52ch] flex-col items-start gap-2 px-6 py-10">
+    <div className="flex max-w-[56ch] flex-col items-start gap-2 px-6 py-10">
+      {art && <Illustration art={art} className="mb-2 -ml-3" />}
       <h3 className="figures text-xl font-semibold text-ink">{title}</h3>
       <div className="text-ink-muted">{children}</div>
       {action ? <div className="mt-3">{action}</div> : null}

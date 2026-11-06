@@ -166,7 +166,7 @@ function ClubDetail({ club }: { club: ClubSummary }) {
         {(list) =>
           list.length === 0 ? (
             <Panel>
-              <EmptyState title={`No shots with ${club.label} yet`}>
+              <EmptyState art="flight" title={`No shots with ${club.label} yet`}>
                 <p>Shots appear here once you log a range or simulator session with this club.</p>
               </EmptyState>
             </Panel>
@@ -238,7 +238,7 @@ export default function ShotsPage() {
           if (withShots.length === 0) {
             return (
               <Panel>
-                <EmptyState title="No shots logged yet">
+                <EmptyState art="flight" title="No shots logged yet">
                   <p>Once you record range or simulator sessions, each club's carry, dispersion and launch numbers show up here.</p>
                 </EmptyState>
               </Panel>

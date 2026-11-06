@@ -111,7 +111,7 @@ function EntryGrid({ courses, onDone, onCancel, onAddCourse }: { courses: Course
     const parsed = RoundCreate.safeParse(input);
     if (!parsed.success) return setServer({ code: 'VALIDATION', message: parsed.error.issues[0]?.message ?? 'Check the round details' });
     setBusy(true);
-    const res = await mutate('rounds.create', parsed.data);
+    const res = await mutate('rounds.create', parsed.data, { done: (r) => `Round saved: ${r.strokes} strokes` });
     setBusy(false);
     if (!res.ok) return setServer(res.error);
     onDone(res.data.id);

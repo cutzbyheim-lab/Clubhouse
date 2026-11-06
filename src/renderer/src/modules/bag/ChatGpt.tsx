@@ -42,7 +42,7 @@ export function ConnectForm({ onConnected, compact = false }: { onConnected?: (s
   const connect = async () => {
     setBusy(true);
     setError(null);
-    const res = await mutate('ai.connect', { apiKey: key });
+    const res = await mutate('ai.connect', { apiKey: key }, { done: 'ChatGPT connected' });
     setBusy(false);
     if (!res.ok) return setError(res.error);
     setKey('');
@@ -109,13 +109,13 @@ export function ChatGptSettings({ open, onClose }: { open: boolean; onClose: () 
                 <div className="text-sm font-medium text-ink">Connected</div>
                 <div className="figures text-xs text-ink-muted">Key ending …{s.keyHint}</div>
               </div>
-              <Button variant="danger" busy={busy} onClick={() => void run(mutate('ai.disconnect', {}))}>
+              <Button variant="danger" busy={busy} onClick={() => void run(mutate('ai.disconnect', {}, { done: 'ChatGPT disconnected' }))}>
                 Disconnect
               </Button>
             </div>
             <Field label="Model" hint="Bigger models are more thorough and cost more per request.">
               {(id) => (
-                <Select id={id} value={s.model ?? ''} disabled={busy || s.models.length === 0} onChange={(e) => void run(mutate('ai.setModel', { model: e.target.value }))}>
+                <Select id={id} value={s.model ?? ''} disabled={busy || s.models.length === 0} onChange={(e) => void run(mutate('ai.setModel', { model: e.target.value }, { done: `Using ${e.target.value}` }))}>
                   {s.models.length === 0 && <option value={s.model ?? ''}>{s.model ?? 'Couldn’t load models (offline?)'}</option>}
                   {s.models.map((m) => (
                     <option key={m} value={m}>

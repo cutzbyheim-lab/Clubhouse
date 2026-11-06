@@ -71,7 +71,7 @@ function PlanRow({ plan }: { plan: PlanSummary }) {
   const [busy, setBusy] = useState(false);
   const set = async (status: PlanSummary['status']) => {
     setBusy(true);
-    await mutate('practice.setPlanStatus', { id: plan.id, status });
+    await mutate('practice.setPlanStatus', { id: plan.id, status }, { done: status === 'done' ? 'Marked done' : status === 'skipped' ? 'Skipped' : 'Back on the plan' });
     setBusy(false);
   };
   return (
@@ -132,7 +132,7 @@ function LogDrawer({ drill, plans, onClose }: { drill: DrillSummary | null; plan
     });
     if (!parsed.success) return setError({ code: 'VALIDATION', message: parsed.error.issues[0]?.message ?? 'Check the details' });
     setBusy(true);
-    const res = await mutate('practice.log', parsed.data);
+    const res = await mutate('practice.log', parsed.data, { done: 'Result logged' });
     setBusy(false);
     if (!res.ok) return setError(res.error);
     onClose();
@@ -205,7 +205,7 @@ function PlanDrawer({ open, drills, onClose }: { open: boolean; drills: DrillSum
     });
     if (!parsed.success) return setError(parsed.error.issues[0]?.path[0] === 'items' ? 'Pick at least one drill' : (parsed.error.issues[0]?.message ?? 'Check the plan'));
     setBusy(true);
-    const res = await mutate('practice.createPlan', parsed.data);
+    const res = await mutate('practice.createPlan', parsed.data, { done: 'Session planned' });
     setBusy(false);
     if (!res.ok) return setError(res.error.message);
     onClose();

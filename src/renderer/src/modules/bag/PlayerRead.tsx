@@ -25,7 +25,7 @@ const ago = (iso: string) => {
 function Estimate({ label, value, note }: { label: string; value: string; note: string }) {
   return (
     <div className="rounded-control border border-brass/25 bg-sunken px-4 py-3">
-      <div className="text-[11px] uppercase tracking-wide text-ink-faint">{label}</div>
+      <div className="text-xs text-ink-faint">{label}</div>
       <div className="figures mt-0.5 text-lg font-semibold text-ink">{value}</div>
       <div className="text-[11px] text-brass/90">{note}</div>
     </div>

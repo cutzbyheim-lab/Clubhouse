@@ -46,6 +46,62 @@
 
   --radius-control: 6px;
   --radius-panel: 10px;
+
+  /* Motion: quick, decelerating, never bouncy. Things that answer a click move; nothing loops. */
+  --ease-out: cubic-bezier(0.22, 0.8, 0.24, 1);
+  --ease-in-out: cubic-bezier(0.6, 0, 0.3, 1);
+
+  --animate-route-in: route-in 220ms var(--ease-out) both;
+  --animate-fade-in: fade-in 200ms var(--ease-out) both;
+  --animate-fade-out: fade-out 160ms ease-in both;
+  --animate-drawer-in: drawer-in 280ms var(--ease-out) both;
+  --animate-drawer-out: drawer-out 180ms ease-in both;
+  --animate-toast-in: toast-in 260ms var(--ease-out) both;
+  --animate-toast-out: toast-out 180ms ease-in both;
+  --animate-rise: rise 420ms var(--ease-out) both;
+  --animate-draw: draw 1600ms var(--ease-in-out) both;
+  --animate-shimmer: shimmer 1400ms linear infinite;
+
+  @keyframes route-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes fade-out {
+    from { opacity: 1; }
+    to { opacity: 0; }
+  }
+  @keyframes drawer-in {
+    from { transform: translateX(32px); opacity: 0; }
+    to { transform: none; opacity: 1; }
+  }
+  @keyframes drawer-out {
+    from { transform: none; opacity: 1; }
+    to { transform: translateX(24px); opacity: 0; }
+  }
+  @keyframes toast-in {
+    from { transform: translateY(12px) scale(0.98); opacity: 0; }
+    to { transform: none; opacity: 1; }
+  }
+  @keyframes toast-out {
+    from { opacity: 1; }
+    to { transform: translateY(6px); opacity: 0; }
+  }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes draw {
+    from { stroke-dashoffset: var(--len, 1200); }
+    to { stroke-dashoffset: 0; }
+  }
+  @keyframes shimmer {
+    from { background-position: 200% 0; }
+    to { background-position: -200% 0; }
+  }
 }
 
 @layer base {
@@ -108,6 +164,13 @@
   font-family: var(--font-figure);
   font-variant-numeric: tabular-nums lining-nums;
   letter-spacing: -0.01em;
+}
+
+/* A loading placeholder that sweeps gently, shaped like the content it stands in for. */
+@utility skeleton {
+  background: linear-gradient(90deg, var(--color-raised) 0%, var(--color-overlay) 50%, var(--color-raised) 100%);
+  background-size: 200% 100%;
+  animation: var(--animate-shimmer);
 }
 
 @media (prefers-reduced-motion: reduce) {

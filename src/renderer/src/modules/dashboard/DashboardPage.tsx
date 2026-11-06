@@ -11,9 +11,10 @@ import { InsightCard, ToPar, YardageLadder } from '@/design/golf';
 import { Page, Panel } from '@/design/Page';
 import { QueryView } from '@/design/QueryView';
 import { StatTile, type Delta } from '@/design/StatTile';
-import { EmptyState } from '@/design/StateViews';
 import { SampleBadge } from '@/design/controls';
 import { hasData, mutate, useQuery } from '@/lib/api';
+import { FirstRun } from './FirstRun';
+import { Greeting } from './Greeting';
 
 const shortDate = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 
@@ -37,7 +38,7 @@ function SampleBanner({ summary }: { summary: DataSummary }) {
         busy={busy}
         onClick={async () => {
           setBusy(true);
-          const res = await mutate('data.clearSample', {});
+          const res = await mutate('data.clearSample', {}, { done: 'Sample data removed' });
           setBusy(false);
           if (!res.ok) setError(res.error);
         }}
@@ -46,46 +47,6 @@ function SampleBanner({ summary }: { summary: DataSummary }) {
       </Button>
       {error && <p className="w-full text-sm text-hazard">{error.message}</p>}
     </div>
-  );
-}
-
-function Welcome() {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<AppError | null>(null);
-  return (
-    <Panel>
-      <EmptyState
-        title="No rounds or shots yet"
-        action={
-          <div className="flex flex-col items-start gap-2">
-            <div className="flex gap-2">
-              <Button
-                variant="primary"
-                busy={busy}
-                onClick={async () => {
-                  setBusy(true);
-                  const res = await mutate('data.loadSample', {});
-                  setBusy(false);
-                  if (!res.ok) setError(res.error);
-                }}
-              >
-                Load sample data
-              </Button>
-              <Link to="/rounds" className="rounded-control border border-rule-strong px-3.5 py-1.5 text-sm text-ink-soft hover:bg-overlay hover:text-ink">
-                Record a round
-              </Link>
-            </div>
-            <p className="text-sm text-ink-faint">Sample data is clearly marked and can be removed in one click.</p>
-            {error && <p className="text-sm text-hazard">{error.message}</p>}
-          </div>
-        }
-      >
-        <p>
-          Your scoring, distances and trends will appear here once you record a round or log a session. Nothing is estimated: every number on this
-          screen will come from your own entries. To look around first, load the sample data.
-        </p>
-      </EmptyState>
-    </Panel>
   );
 }
 
@@ -103,6 +64,7 @@ function Overview({ d }: { d: DashboardOverview }) {
       <div className="grid grid-cols-4 gap-4">
         <StatTile
           accent
+          animate={0}
           label="Scoring average"
           value={d.scoring.value === null ? null : d.scoring.value.toFixed(1)}
           basis={`last ${d.scoring.n} full rounds`}
@@ -110,6 +72,7 @@ function Overview({ d }: { d: DashboardOverview }) {
           emptyReason="Needs 3 complete 18-hole rounds"
         />
         <StatTile
+          animate={80}
           label="Greens in regulation"
           value={pct(d.girPct.value)}
           unit="%"
@@ -118,6 +81,7 @@ function Overview({ d }: { d: DashboardOverview }) {
           emptyReason="Needs putts recorded on 3 rounds"
         />
         <StatTile
+          animate={160}
           label="Fairways hit"
           value={pct(d.fairwayPct.value)}
           unit="%"
@@ -126,6 +90,7 @@ function Overview({ d }: { d: DashboardOverview }) {
           emptyReason="Needs fairways recorded on 3 rounds"
         />
         <StatTile
+          animate={240}
           label="Putts per round"
           value={d.puttsPerRound.value === null ? null : d.puttsPerRound.value.toFixed(1)}
           basis={`last ${d.puttsPerRound.n} full rounds`}
@@ -245,13 +210,13 @@ export default function DashboardPage() {
   const hasAny = hasData(summary) && (summary.data.hasOwn || summary.data.hasSample);
 
   return (
-    <Page title="Dashboard" lede="Where your game stands, drawn only from what you have recorded.">
+    <Page title="Dashboard" header={<Greeting firstRun={hasData(summary) && !hasAny} />}>
       <QueryView q={summary} label="Reading your data">
         {(s) => (
           <div className="flex flex-col gap-6">
             <SampleBanner summary={s} />
             {!hasAny ? (
-              <Welcome />
+              <FirstRun />
             ) : (
               <QueryView q={overview} label="Building your dashboard" onRetry={overview.reload}>
                 {(d) => <Overview d={d} />}

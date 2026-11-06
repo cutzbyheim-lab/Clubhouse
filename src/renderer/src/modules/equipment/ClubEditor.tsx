@@ -122,7 +122,7 @@ export function ClubEditor({
       return;
     }
     setBusy(true);
-    const res = await mutate('clubs.save', { id: club?.id ?? null, club: parsed.data, ...(infoTouched ? { modelInfo } : {}) });
+    const res = await mutate('clubs.save', { id: club?.id ?? null, club: parsed.data, ...(infoTouched ? { modelInfo } : {}) }, { done: (c) => (club ? `${c.label} saved` : `${c.label} added`) });
     setBusy(false);
     if (!res.ok) return setServerError(res.error);
     onSaved?.({ identified: infoTouched && modelInfo !== null });
@@ -155,7 +155,7 @@ export function ClubEditor({
   const remove = async () => {
     if (!club) return;
     setBusy(true);
-    const res = await mutate('clubs.delete', { id: club.id });
+    const res = await mutate('clubs.delete', { id: club.id }, { done: `${club.label} deleted` });
     setBusy(false);
     if (!res.ok) return setServerError(res.error);
     onClose();

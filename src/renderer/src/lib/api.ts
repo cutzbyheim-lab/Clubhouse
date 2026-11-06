@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Channel, ChannelInput, ChannelOutput } from '@shared/ipc/contract';
 import type { AppError, Result } from '@shared/ipc/result';
 import { useDataVersion } from '@/stores/dataVersion';
+import { toast } from '@/stores/toasts';
 
 /** Typed call into the main process. Never throws; transport failures become INTERNAL errors. */
 export async function call<C extends Channel>(
@@ -18,10 +19,17 @@ export async function call<C extends Channel>(
   }
 }
 
-/** A write: on success every open query refetches. */
-export async function mutate<C extends Channel>(channel: C, input: ChannelInput<C>): Promise<Result<ChannelOutput<C>>> {
+/** A write: on success every open query refetches, and `done` (if given) is confirmed in a toast. */
+export async function mutate<C extends Channel>(
+  channel: C,
+  input: ChannelInput<C>,
+  opts: { done?: string | ((data: ChannelOutput<C>) => string) } = {},
+): Promise<Result<ChannelOutput<C>>> {
   const res = await call(channel, input);
-  if (res.ok) useDataVersion.getState().bump();
+  if (res.ok) {
+    useDataVersion.getState().bump();
+    if (opts.done) toast(typeof opts.done === 'function' ? opts.done(res.data) : opts.done);
+  }
   return res;
 }
 

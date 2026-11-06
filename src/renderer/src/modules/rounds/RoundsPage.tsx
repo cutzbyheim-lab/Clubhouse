@@ -94,7 +94,7 @@ function RoundView({ id }: { id: number }) {
                     <Button
                       variant="danger"
                       onClick={async () => {
-                        const res = await mutate('rounds.delete', { id: r.id });
+                        const res = await mutate('rounds.delete', { id: r.id }, { done: 'Round deleted' });
                         if (res.ok) setParams({});
                       }}
                     >
@@ -159,6 +159,7 @@ export default function RoundsPage() {
               return (
                 <Panel>
                   <EmptyState
+                    art="flag"
                     title="No rounds yet"
                     action={
                       <Button variant="primary" onClick={() => setParams({ new: '1' })}>

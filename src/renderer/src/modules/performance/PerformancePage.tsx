@@ -156,7 +156,7 @@ export default function PerformancePage() {
         q={perf}
         label="Analysing your rounds"
         onRetry={perf.reload}
-        empty={{ title: 'No rounds to analyse yet', body: <p>Trends, scoring patterns and putting stats appear once you've recorded a few rounds.</p> }}
+        empty={{ art: 'chart', title: 'No rounds to analyse yet', body: <p>Trends, scoring patterns and putting stats appear once you've recorded a few rounds.</p> }}
       >
         {(p) => <Lab p={p} />}
       </QueryView>

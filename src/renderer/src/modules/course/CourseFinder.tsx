@@ -56,7 +56,7 @@ function SearchStep({ onPick, onManual }: { onPick: (r: CourseSearchResult) => v
         </Button>
       </form>
       {error && <ErrorState error={error} onRetry={() => void run()} />}
-      {busy && <LoadingState label="Searching for courses" />}
+      {busy && <LoadingState shape="lines" label="Searching for courses" />}
       {results && !busy && (
         results.length === 0 ? (
           <div className="rounded-panel border border-rule p-5 text-sm text-ink-muted">
@@ -182,7 +182,7 @@ function PreviewStep({ preview, onBack, onImported }: { preview: CoursePreview; 
     });
     if (!parsed.success) return setError(parsed.error.issues[0]?.message ?? 'Check the holes and try again.');
     setBusy(true);
-    const res = await mutate('courses.import', parsed.data);
+    const res = await mutate('courses.import', parsed.data, { done: (c) => `${c.name} added` });
     setBusy(false);
     if (!res.ok) return setError(res.error.message);
     onImported(res.data.id);
@@ -347,7 +347,7 @@ export function CourseFinder({ open, onClose, onImported, onManual }: { open: bo
         <div>
           <p className="figures text-lg font-semibold">{step.target.name}</p>
           <p className="text-sm text-ink-muted">Loading the course map. Large courses can take up to half a minute.</p>
-          <LoadingState label="Loading course map" />
+          <LoadingState shape="block" label="Loading course map" />
         </div>
       )}
       {step.kind === 'error' && (

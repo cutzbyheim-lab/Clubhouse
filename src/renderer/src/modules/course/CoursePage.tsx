@@ -94,10 +94,10 @@ function HolePanel({ course, holeIdx, preferRound }: { course: CourseDetail; hol
     <div className="grid h-[calc(100vh-250px)] min-h-[560px] grid-cols-[minmax(0,1fr)_300px] gap-6">
       <Panel className="relative overflow-hidden">
         {hole.geometry && wantsPhoto && imagery.status === 'loading' ? (
-          <LoadingState label="Loading aerial photo" />
+          <LoadingState shape="block" label="Loading aerial photo" />
         ) : hole.geometry ? (
           <>
-            <Suspense fallback={<LoadingState label="Preparing 3D view" />}>
+            <Suspense fallback={<LoadingState shape="block" label="Preparing 3D view" />}>
               <HoleViewer geometry={hole.geometry} holeNumber={hole.number} tracks={visible} markers={markers} photoUrl={photo?.dataUrl ?? null} />
             </Suspense>
             {course.attribution && (
@@ -271,6 +271,7 @@ export default function CoursePage() {
         label="Loading courses"
         onRetry={courses.reload}
         empty={{
+          art: 'contours',
           title: 'No courses yet',
           body: <p>Search for a real course to see its holes in 3D, or load the sample data to explore a demo course.</p>,
           action: findButton,

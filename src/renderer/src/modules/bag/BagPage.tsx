@@ -123,7 +123,7 @@ export default function BagPage() {
   const readBag = async () => {
     setReading(true);
     setReadError(null);
-    const res = await mutate('ai.analyzeBag', {});
+    const res = await mutate('ai.analyzeBag', {}, { done: 'ChatGPT read your bag' });
     setReading(false);
     if (!res.ok) setReadError(res.error);
   };
@@ -131,7 +131,7 @@ export default function BagPage() {
   const setBag = async (ids: number[]) => {
     setBusy(true);
     setError(null);
-    const res = await mutate('bag.setClubs', { clubIds: ids });
+    const res = await mutate('bag.setClubs', { clubIds: ids }, { done: 'Bag updated' });
     setBusy(false);
     if (!res.ok) setError(res.error);
   };

@@ -1,3 +1,4 @@
+import { Illustration } from '@/design/Illustrations';
 import { useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import type { Insight } from '@shared/dto';
@@ -63,6 +64,7 @@ export default function IntelligencePage() {
                 </div>
                 {shown.length === 0 ? (
                   <Panel className="p-6">
+                    <Illustration art="chart" className="mb-2 -ml-3" />
                     <h3 className="figures text-lg font-semibold">Nothing to report{filter !== 'all' ? ' in this category' : ''}</h3>
                     <p className="mt-1 max-w-[60ch] text-sm text-ink-muted">
                       Insights only appear when your data clearly supports them. Record more rounds with putts and tee-shot results, and log range sessions,

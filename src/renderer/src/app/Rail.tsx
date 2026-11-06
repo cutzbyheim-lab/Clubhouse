@@ -1,4 +1,5 @@
-import { NavLink } from 'react-router';
+import { useLayoutEffect, useRef, useState } from 'react';
+import { NavLink, useLocation } from 'react-router';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { Segmented } from '@/design/controls';
 import { useProfile } from '@/stores/profile';
@@ -38,6 +39,22 @@ export function Rail() {
   const toggle = useUi((s) => s.toggleRail);
   const profile = useProfile((s) => s.profile);
   const update = useProfile((s) => s.update);
+  const list = useRef<HTMLDivElement>(null);
+  const location = useLocation();
+  // One highlight that glides to the current module rather than jumping.
+  const [mark, setMark] = useState<{ top: number; height: number } | null>(null);
+  useLayoutEffect(() => {
+    const el = list.current;
+    if (!el) return;
+    const place = () => {
+      const a = el.querySelector<HTMLElement>('a[aria-current="page"]');
+      setMark(a ? { top: a.offsetTop, height: a.offsetHeight } : null);
+    };
+    place();
+    const ro = new ResizeObserver(place);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [location.pathname, collapsed]);
 
   return (
     <nav
@@ -57,7 +74,14 @@ export function Rail() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-2 py-3">
+      <div ref={list} className="relative flex-1 overflow-y-auto px-2 py-3">
+        {mark && (
+          <span
+            aria-hidden
+            className="absolute right-2 left-2 rounded-control bg-fairway-deep shadow-[inset_2px_0_0_var(--color-green-speed)] transition-[top,height] duration-300 ease-(--ease-out)"
+            style={{ top: mark.top, height: mark.height }}
+          />
+        )}
         {MODULE_GROUPS.map((group) => {
           const items = modules.filter((m) => m.group === group);
           if (items.length === 0) return null;
@@ -74,10 +98,8 @@ export function Rail() {
                       end={path === ''}
                       title={collapsed ? title : undefined}
                       className={({ isActive }) =>
-                        `flex items-center gap-3 rounded-control px-2.5 py-2 text-sm transition-colors ${
-                          isActive
-                            ? 'bg-fairway-deep text-ink shadow-[inset_2px_0_0_var(--color-green-speed)]'
-                            : 'text-ink-soft hover:bg-raised hover:text-ink'
+                        `relative flex items-center gap-3 rounded-control px-2.5 py-2 text-sm transition-colors duration-150 ${
+                          isActive ? 'text-ink' : 'text-ink-soft hover:bg-raised/70 hover:text-ink'
                         }`
                       }
                     >

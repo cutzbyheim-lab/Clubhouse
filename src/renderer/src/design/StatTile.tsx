@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { CountUp } from './motion';
 
 export interface Delta {
   /** Signed change, already in display units. */
@@ -21,6 +22,7 @@ export function StatTile({
   delta,
   emptyReason,
   accent,
+  animate,
 }: {
   label: string;
   value: string | null;
@@ -29,6 +31,8 @@ export function StatTile({
   delta?: Delta | null;
   emptyReason?: string;
   accent?: boolean;
+  /** Roll the figure up on first show, after this many ms. Used once, on the dashboard. */
+  animate?: number;
 }) {
   const improved = delta ? (delta.lowerIsBetter ? delta.value < 0 : delta.value > 0) : false;
   const flat = delta ? Math.abs(delta.value) < 1e-9 : true;
@@ -43,7 +47,7 @@ export function StatTile({
       ) : (
         <>
           <div className="mt-1 flex items-baseline gap-1.5">
-            <span className="figures text-3xl font-semibold text-ink">{value}</span>
+            <span className="figures text-3xl font-semibold text-ink">{animate === undefined ? value : <CountUp text={value} delayMs={animate} />}</span>
             {unit && <span className="figures text-base text-ink-muted">{unit}</span>}
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-x-2 text-xs">
