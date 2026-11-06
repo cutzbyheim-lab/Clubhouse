@@ -4,15 +4,12 @@ Installed copies of Clubhouse update themselves from this repository's GitHub
 Releases. To ship a new version:
 
 1. Bump `version` in `package.json` (e.g. `0.3.0` → `0.3.1`).
-2. Commit, then tag with the same version and push both:
-   ```
-   git commit -am "Release 0.3.1"
-   git tag v0.3.1
-   git push && git push --tags
-   ```
-3. The **Release** workflow builds the Windows installer on GitHub's Windows
-   runner, runs the tests, and publishes the release with
-   `Clubhouse-Setup-0.3.1.exe` and `latest.yml` (the file the updater reads).
+2. Commit and push to `main`.
+
+The **Release** workflow sees a version with no release yet, builds the
+Windows installer on GitHub's Windows runner, runs the tests, and publishes
+release `v0.3.1` with `Clubhouse-Setup-0.3.1.exe` and `latest.yml` (the file
+the updater reads). Pushes that don't change the version build nothing.
 
 Within a few hours (or on next launch) each installed copy downloads the
 update in the background and shows **Restart to update** in the sidebar.

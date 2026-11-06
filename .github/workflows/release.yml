@@ -1,19 +1,22 @@
 name: Release
 
-# Pushing a tag like v0.3.1 builds the Windows installer, runs the tests, and
-# publishes a GitHub Release. Installed copies of Clubhouse check these
-# releases and update themselves.
+# Every push to main checks package.json's version. If no GitHub Release
+# exists for it yet, this builds the Windows installer, runs the tests and
+# publishes the release (creating tag vX.Y.Z). Installed copies of Clubhouse
+# check these releases and update themselves.
+#
+# To ship an update: bump "version" in package.json and push to main.
 
 on:
   push:
-    tags: ['v*']
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release
   cancel-in-progress: false
 
 jobs:
@@ -22,31 +25,42 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Is this version already released?
+        id: version
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          v="v$(node -p "require('./package.json').version")"
+          echo "tag=$v" >> "$GITHUB_OUTPUT"
+          if gh release view "$v" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $v already exists; nothing to do."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Building release $v."
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/setup-node@v5
+        if: steps.version.outputs.release == 'true'
         with:
           node-version: 22
           cache: npm
 
       - name: Install dependencies
+        if: steps.version.outputs.release == 'true'
         run: npm ci
 
-      - name: Check the tag matches package.json
-        if: startsWith(github.ref, 'refs/tags/')
-        shell: bash
-        run: |
-          pkg="v$(node -p "require('./package.json').version")"
-          if [ "$pkg" != "${GITHUB_REF_NAME}" ]; then
-            echo "Tag ${GITHUB_REF_NAME} does not match package.json version $pkg" >&2
-            exit 1
-          fi
-
       - name: Test
+        if: steps.version.outputs.release == 'true'
         run: npm test
 
       - name: Typecheck and build
+        if: steps.version.outputs.release == 'true'
         run: npm run build
 
       - name: Package and publish
+        if: steps.version.outputs.release == 'true'
         run: npx electron-builder --win --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
