@@ -8,5 +8,5 @@ export default defineModule({
   group: 'Improve',
   icon: Target,
   lede: 'Plan sessions around your weak spots and log what you actually practised.',
-  load: () => import('@/app/ModulePending'),
+  load: () => import('./PracticePage'),
 });

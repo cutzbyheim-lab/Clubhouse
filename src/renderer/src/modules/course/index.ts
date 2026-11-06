@@ -8,5 +8,5 @@ export default defineModule({
   group: 'Play',
   icon: Mountain,
   lede: 'Walk each hole in 3D with your recorded shots laid over the terrain.',
-  load: () => import('@/app/ModulePending'),
+  load: () => import('./CoursePage'),
 });

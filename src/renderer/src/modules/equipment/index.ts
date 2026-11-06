@@ -8,5 +8,5 @@ export default defineModule({
   group: 'Gear',
   icon: Wrench,
   lede: 'Specs, shafts and gapping across everything you own, in the bag or not.',
-  load: () => import('@/app/ModulePending'),
+  load: () => import('./EquipmentPage'),
 });

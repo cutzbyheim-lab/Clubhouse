@@ -10,6 +10,9 @@ export const IPC_INVOKE = 'clubhouse:invoke';
  */
 export const MIN_SAMPLE_FOR_AVERAGE = 5;
 
+/** Round-level averages (scoring, GIR %, putts per round) need at least this many rounds. */
+export const MIN_ROUNDS_FOR_AVERAGE = 3;
+
 /** Provenance of every measured row. See ARCHITECTURE.md §1. */
 export const DATA_SOURCES = ['manual', 'imported', 'sample'] as const;
 export type DataSource = (typeof DATA_SOURCES)[number];

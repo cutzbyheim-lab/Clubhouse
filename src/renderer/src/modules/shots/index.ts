@@ -8,5 +8,5 @@ export default defineModule({
   group: 'Analyse',
   icon: Crosshair,
   lede: 'Carry, dispersion and launch by club, from the shots you have logged.',
-  load: () => import('@/app/ModulePending'),
+  load: () => import('./ShotsPage'),
 });

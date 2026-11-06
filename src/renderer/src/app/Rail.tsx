@@ -1,5 +1,7 @@
 import { NavLink } from 'react-router';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Segmented } from '@/design/controls';
+import { useProfile } from '@/stores/profile';
 import { useUi } from '@/stores/ui';
 import { MODULE_GROUPS } from './module';
 import { modules } from './registry';
@@ -33,6 +35,8 @@ function Contours() {
 export function Rail() {
   const collapsed = useUi((s) => s.railCollapsed);
   const toggle = useUi((s) => s.toggleRail);
+  const profile = useProfile((s) => s.profile);
+  const update = useProfile((s) => s.update);
 
   return (
     <nav
@@ -87,6 +91,20 @@ export function Rail() {
         })}
       </div>
 
+      {!collapsed && profile && (
+        <div className="mx-3 mb-1 flex items-center justify-between border-t border-rule pt-3">
+          <span className="text-xs text-ink-faint">Distances</span>
+          <Segmented
+            label="Distance unit"
+            value={profile.distanceUnit}
+            options={[
+              { value: 'yards', label: 'yd' },
+              { value: 'metres', label: 'm' },
+            ]}
+            onChange={(v) => void update({ distanceUnit: v, speedUnit: v === 'yards' ? 'mph' : 'kmh' })}
+          />
+        </div>
+      )}
       <button
         type="button"
         onClick={toggle}

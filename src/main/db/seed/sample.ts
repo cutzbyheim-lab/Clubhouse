@@ -149,7 +149,13 @@ function draftScore(rng: Rng, hole: HoleRow, improvement: number): ScoreDraft {
     [3, Math.max(0.01, 0.06 + shift * 0.3)],
   ]);
   const strokes = hole.par + rel;
-  let putts = rng.weighted<number>([[0, 0.02], [1, 0.18], [2, 0.62], [3, 0.16], [4, 0.02]]);
+  // Pars and birdies often come from a chip close and one putt; big numbers attract extra putts.
+  let putts =
+    rel <= 0
+      ? rng.weighted<number>([[0, 0.03], [1, 0.38], [2, 0.56], [3, 0.03]])
+      : rel === 1
+        ? rng.weighted<number>([[0, 0.01], [1, 0.2], [2, 0.69], [3, 0.1]])
+        : rng.weighted<number>([[1, 0.22], [2, 0.6], [3, 0.16], [4, 0.02]]);
   putts = Math.min(putts, strokes - 1);
   let penalties = rel >= 2 && rng.next() < 0.35 ? 1 : 0;
   if (penalties + putts > strokes - 1) penalties = 0;

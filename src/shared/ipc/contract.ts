@@ -1,4 +1,25 @@
 import { z } from 'zod';
+import {
+  BagSetClubs,
+  ClubSave,
+  ClubSummary,
+  CourseCreate,
+  CourseDetail,
+  CourseSummary,
+  DashboardOverview,
+  HoleRecord,
+  Insight,
+  Performance,
+  PlanCreate,
+  PracticeLogInput,
+  PracticeOverview,
+  RoundCreate,
+  RoundDetail,
+  RoundSummary,
+  SessionSummary,
+  ShotPoint,
+} from '../dto';
+import { Id, PlayerProfile, PlayerProfileUpdate } from '../schemas';
 
 /**
  * The single IPC contract between renderer and main.
@@ -7,11 +28,11 @@ import { z } from 'zod';
  * input against `input` before any work; renderer call sites are typed from
  * `z.infer` of both. Adding a channel here is the only way to expose new
  * capability to the renderer.
- *
- * Domain channels (bag, shots, rounds, …) are added module by module.
  */
 
 const Empty = z.object({}).strict();
+const ById = z.object({ id: Id }).strict();
+const Ok = z.object({ ok: z.literal(true) });
 
 export const AppInfo = z.object({
   name: z.string(),
@@ -49,9 +70,47 @@ export type DataSummary = z.infer<typeof DataSummary>;
 export const contract = {
   'app.info': { input: Empty, output: AppInfo },
   'db.health': { input: Empty, output: DbHealth },
+
   'data.summary': { input: Empty, output: DataSummary },
   'data.loadSample': { input: Empty, output: DataSummary },
   'data.clearSample': { input: Empty, output: z.object({ removed: Counts, kept: Counts, summary: DataSummary }) },
+
+  'profile.get': { input: Empty, output: PlayerProfile },
+  'profile.update': { input: PlayerProfileUpdate.strict(), output: PlayerProfile },
+
+  'dashboard.overview': { input: Empty, output: DashboardOverview },
+
+  'clubs.list': { input: Empty, output: z.array(ClubSummary) },
+  'clubs.save': { input: ClubSave, output: ClubSummary },
+  'clubs.delete': { input: ById, output: Ok },
+  'bag.setClubs': { input: BagSetClubs, output: z.array(ClubSummary) },
+
+  'shots.forClub': { input: z.object({ clubId: Id }).strict(), output: z.array(ShotPoint) },
+  'shots.setExcluded': { input: z.object({ id: Id, excluded: z.boolean() }).strict(), output: Ok },
+  'sessions.list': { input: Empty, output: z.array(SessionSummary) },
+
+  'rounds.list': { input: Empty, output: z.array(RoundSummary) },
+  'rounds.get': { input: ById, output: RoundDetail },
+  'rounds.create': { input: RoundCreate, output: RoundDetail },
+  'rounds.delete': { input: ById, output: Ok },
+
+  'courses.list': { input: Empty, output: z.array(CourseSummary) },
+  'courses.get': { input: ById, output: CourseDetail },
+  'courses.create': { input: CourseCreate, output: CourseSummary },
+  'courses.holeRecord': { input: z.object({ holeId: Id }).strict(), output: HoleRecord },
+
+  'performance.get': { input: Empty, output: Performance },
+
+  'practice.overview': { input: Empty, output: PracticeOverview },
+  'practice.log': { input: PracticeLogInput, output: Ok },
+  'practice.createPlan': { input: PlanCreate, output: Ok },
+  'practice.setPlanStatus': {
+    input: z.object({ id: Id, status: z.enum(['planned', 'done', 'skipped']) }).strict(),
+    output: Ok,
+  },
+
+  'insights.list': { input: Empty, output: z.array(Insight) },
+  'insights.setDismissed': { input: z.object({ key: z.string().min(1).max(200), dismissed: z.boolean() }).strict(), output: Ok },
 } as const satisfies Record<string, { input: z.ZodType; output: z.ZodType }>;
 
 export type Contract = typeof contract;

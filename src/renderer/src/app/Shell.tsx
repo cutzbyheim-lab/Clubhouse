@@ -1,9 +1,15 @@
-import { Suspense } from 'react';
+import { Suspense, useEffect } from 'react';
 import { Outlet } from 'react-router';
 import { LoadingState } from '@/design/StateViews';
+import { useProfile } from '@/stores/profile';
 import { Rail } from './Rail';
 
 export function Shell() {
+  const load = useProfile((s) => s.load);
+  useEffect(() => {
+    void load();
+  }, [load]);
+
   return (
     <div className="flex h-full">
       <Rail />

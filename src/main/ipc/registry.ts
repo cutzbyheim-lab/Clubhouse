@@ -21,6 +21,8 @@ export function handle<C extends Channel>(channel: C, fn: Handler<C>): void {
   handlers.set(channel, fn as (input: unknown) => unknown);
 }
 
+export const registeredChannels = (): Channel[] => [...handlers.keys()];
+
 function issuesOf(error: z.ZodError): Record<string, string> {
   const out: Record<string, string> = {};
   for (const issue of error.issues) {

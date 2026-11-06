@@ -8,5 +8,5 @@ export default defineModule({
   group: 'Play',
   icon: ClipboardList,
   lede: 'Score rounds hole by hole: strokes, putts, fairways, greens and penalties.',
-  load: () => import('@/app/ModulePending'),
+  load: () => import('./RoundsPage'),
 });

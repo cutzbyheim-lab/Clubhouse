@@ -3,6 +3,8 @@ import { IsoTimestamp } from './common';
 
 export const DistanceUnit = z.enum(['yards', 'metres']);
 export const SpeedUnit = z.enum(['mph', 'kmh', 'mps']);
+export type DistanceUnit = z.infer<typeof DistanceUnit>;
+export type SpeedUnit = z.infer<typeof SpeedUnit>;
 
 export const PlayerProfile = z.object({
   displayName: z.string().trim().min(1).max(80).nullable(),

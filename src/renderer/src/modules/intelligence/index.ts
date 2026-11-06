@@ -8,5 +8,5 @@ export default defineModule({
   group: 'Analyse',
   icon: Lightbulb,
   lede: 'Findings from your data, each shown with the evidence and sample size behind it.',
-  load: () => import('@/app/ModulePending'),
+  load: () => import('./IntelligencePage'),
 });

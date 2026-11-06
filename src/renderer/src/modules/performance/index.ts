@@ -8,5 +8,5 @@ export default defineModule({
   group: 'Analyse',
   icon: Activity,
   lede: 'Trends across rounds and sessions, measured against your own baseline.',
-  load: () => import('@/app/ModulePending'),
+  load: () => import('./PerformancePage'),
 });

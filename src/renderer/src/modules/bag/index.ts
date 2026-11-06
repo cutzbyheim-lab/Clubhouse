@@ -8,5 +8,5 @@ export default defineModule({
   group: 'Gear',
   icon: Briefcase,
   lede: 'The fourteen clubs you carry, with lofts and your own distances for each.',
-  load: () => import('@/app/ModulePending'),
+  load: () => import('./BagPage'),
 });
