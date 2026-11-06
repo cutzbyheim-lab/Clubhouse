@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CourseImport, CoursePreview } from '@shared/dto';
 import { getCourse } from '../src/main/db/repositories/courses';
-import { holeImagery, importCourse, previewCourse } from '../src/main/services/courseImport';
+import { detectCourseTrees, holeImagery, importCourse, previewCourse } from '../src/main/services/courseImport';
 import { buildPreview } from '../src/main/services/osm/build';
 import { parseOverpass } from '../src/main/services/osm/parse';
 import { ELEVATION, IMAGERY, decodeImage, fetchRaster, lonLatToPixel, pixelToLonLat, terrariumHeight } from '../src/main/services/osm/tiles';
@@ -143,4 +143,72 @@ describe('end to end: preview, import, read the photo back', () => {
     expect(course.holes[0]!.geometry?.elevation).toBeDefined();
     expect(holeImagery(db, course.holes[5]!.id)).toBeNull();
   });
+});
+
+describe('trees from the aerial photo', () => {
+  const pip = (x: number, y: number, poly: readonly (readonly [number, number])[]) => {
+    let c = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const a = poly[i]!, b = poly[j]!;
+      if (a[1] > y !== b[1] > y && x < ((b[0] - a[0]) * (y - a[1])) / (b[1] - a[1]) + a[0]) c = !c;
+    }
+    return c;
+  };
+
+  function plant() {
+    // Plant crowns 35–60 m either side of each fairway's middle.
+    const f = features();
+    const O = { lat: 47.6925, lon: -122.2975 };
+    const kx = 111320 * Math.cos((O.lat * Math.PI) / 180);
+    return f.fairways.flatMap((poly, i) => {
+      const c = poly.reduce((a, p) => ({ lat: a.lat + p.lat / poly.length, lon: a.lon + p.lon / poly.length }), { lat: 0, lon: 0 });
+      const m: [number, number] = [(c.lon - O.lon) * kx, (c.lat - O.lat) * 110540];
+      return [-1, 1].map((side) => ({ at: [m[0] + side * (40 + (i % 3) * 8), m[1] + side * 6] as [number, number], r: 3.5 + (i % 4) * 0.6 }));
+    });
+  }
+  const withTrees = async () => rasters({ truthShift: [0, 0], hazards: true, trees: plant() });
+
+  it('finds trees around the holes and never on mapped turf, sand or water', { timeout: 30_000 }, async () => {
+    const { elevation, photo } = await withTrees();
+    const { preview } = buildPreview(features(), meta, { photo, elevation });
+    const withPhoto = preview.holes.filter((h) => h.geometry.imageryBounds);
+    expect(withPhoto.length).toBeGreaterThan(0);
+    const total = withPhoto.reduce((s, h) => s + (h.geometry.photoTrees?.length ?? 0), 0);
+    expect(total).toBeGreaterThan(0);
+    expect(preview.photoCheck.summary).toMatch(/Found about [\d,]+ trees in the photo/);
+    for (const h of withPhoto) {
+      const o = h.geometry.outlines!;
+      for (const t of h.geometry.photoTrees ?? []) for (const poly of [...o.greens, ...o.fairways, ...o.bunkers, ...o.water]) expect(pip(t[0], t[1], poly)).toBe(false);
+    }
+  });
+
+  it('doesn’t invent trees in plain rough', { timeout: 30_000 }, async () => {
+    const { elevation, photo } = await rasters({ truthShift: [0, 0], hazards: true });
+    const { preview } = buildPreview(features(), meta, { photo, elevation });
+    for (const h of preview.holes) expect(h.geometry.photoTrees?.length ?? 0).toBeLessThanOrEqual(2);
+  });
+
+  it('finds trees for a course imported before tree detection, from its stored photos', async () => {
+    const db = freshDb();
+    const http = tileServer(features(), { truthShift: [0, 0], hazards: true, trees: plant() }, osmCourseFixture());
+    const preview = await previewCourse(http, { ...meta, bbox: [47.6895, -122.3015, 47.6955, -122.2935] });
+    const holes = Array.from({ length: 9 }, (_, i) => {
+      const src = preview.holes[i % preview.holes.length]!;
+      return { key: i < preview.holes.length ? src.key : undefined, number: i + 1, par: src.par ?? 4, strokeIndex: null, lengthM: src.lengthM, geometry: src.geometry };
+    });
+    const input = CourseImport.parse({ osm: meta.osm, name: 'Test Links', location: null, tee: { name: 'White', courseRating: null, slopeRating: null }, holes });
+    const id = importCourse(db, input);
+    const course = { id };
+    // Make it look like an older import: no photo trees stored.
+    for (const h of getCourse(db, course.id).holes) {
+      const { photoTrees: _drop, ...rest } = h.geometry!;
+      db.prepare('UPDATE hole SET geometry = ? WHERE id = ?').run(JSON.stringify(rest), h.id);
+    }
+    const res = await detectCourseTrees(db, course.id);
+    expect(res.holes).toBe(3); // only holes with a stored photo can be searched
+    const after = getCourse(db, course.id).holes.map((h) => h.geometry?.photoTrees);
+    expect(after.map((t) => t?.length ?? 0).reduce((a, b) => a + b, 0)).toBeGreaterThan(0);
+    // Running again finds nothing left to do.
+    expect((await detectCourseTrees(db, course.id)).holes).toBe(0);
+  }, 30_000);
 });

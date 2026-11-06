@@ -1,7 +1,7 @@
-import { lazy, Suspense, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { Search } from 'lucide-react';
-import { Button } from '@/design/Button';
+import { Button, Spinner } from '@/design/Button';
 import { CourseFinder } from './CourseFinder';
 import type { CourseDetail, HoleTrack } from '@shared/dto';
 import type { HoleGeometry } from '@shared/schemas';
@@ -14,7 +14,7 @@ import { Page, Panel } from '@/design/Page';
 import { QueryView } from '@/design/QueryView';
 import { LoadingState } from '@/design/StateViews';
 import { EmptyState } from '@/design/StateViews';
-import { useQuery } from '@/lib/api';
+import { mutate, useQuery } from '@/lib/api';
 import { useUnits } from '@/stores/profile';
 
 const HoleViewer = lazy(() => import('./HoleViewer').then((m) => ({ default: m.HoleViewer })));
@@ -136,6 +136,14 @@ function HolePanel({ course, holeIdx, preferRound }: { course: CourseDetail; hol
               </>
             )}
             {hole.geometry?.elevation && <Terrain geometry={hole.geometry} />}
+            {hole.geometry?.photoTrees && (
+              <>
+                <dt className="text-ink-muted" title="Positions and crown sizes come from the aerial photo; heights are estimated from crown size.">
+                  Trees in photo
+                </dt>
+                <dd className="figures text-ink">{hole.geometry.photoTrees.length.toLocaleString()}</dd>
+              </>
+            )}
           </dl>
           {hole.geometry?.check && <PhotoCheck check={hole.geometry.check} />}
           <QueryView q={record} label="Loading scores">
@@ -216,13 +224,36 @@ function HolePanel({ course, holeIdx, preferRound }: { course: CourseDetail; hol
   );
 }
 
+/** Courses added before tree detection get their trees found from the photos they already have. */
+function useTreeSearch(course: CourseDetail | null): { searching: boolean; error: string | null } {
+  const [state, setState] = useState<{ searching: boolean; error: string | null }>({ searching: false, error: null });
+  const tried = useRef(new Set<number>());
+  const needs = !!course?.holes.some((h) => h.geometry?.source === 'map' && h.geometry.imageryBounds && h.geometry.photoTrees === undefined);
+  useEffect(() => {
+    if (!course || !needs || tried.current.has(course.id)) return;
+    tried.current.add(course.id);
+    setState({ searching: true, error: null });
+    void mutate('courses.detectTrees', { courseId: course.id }, { done: (r) => (r.trees > 0 ? `Found ${r.trees.toLocaleString()} trees` : 'No trees found in the photos') }).then((res) =>
+      setState({ searching: false, error: res.ok ? null : res.error.message }),
+    );
+  }, [course, needs]);
+  return state;
+}
+
 function CourseView({ courseId, preferRound }: { courseId: number; preferRound: number | null }) {
   const course = useQuery('courses.get', { id: courseId });
   const [holeIdx, setHoleIdx] = useState(0);
+  const trees = useTreeSearch(course.status === 'ready' ? course.data : null);
   return (
     <QueryView q={course} label="Loading course" onRetry={course.reload}>
       {(c) => (
         <div className="flex flex-col gap-4">
+          {(trees.searching || trees.error) && (
+            <p role="status" className={`flex items-center gap-2 text-sm ${trees.error ? 'text-hazard' : 'text-ink-muted'}`}>
+              {trees.searching && <Spinner />}
+              {trees.error ?? 'Finding trees in this course’s aerial photos…'}
+            </p>
+          )}
           <div role="tablist" aria-label="Hole" className="flex gap-1 overflow-x-auto pb-1">
             {c.holes.map((h, i) => (
               <button

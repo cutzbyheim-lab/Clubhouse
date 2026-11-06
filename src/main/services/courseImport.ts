@@ -1,10 +1,11 @@
 import type { CourseImport, CoursePreview, CourseSearchResult, HoleImagery, OsmRef } from '@shared/dto';
 import type { DB } from '../db/connection';
 import { DomainError } from '../errors';
-import { OSM_ATTRIBUTION, buildPreview, type HoleImage } from './osm/build';
+import { OSM_ATTRIBUTION, buildPreview, treesFromPhoto, type HoleImage } from './osm/build';
 import { NOMINATIM, OVERPASS, type Http } from './osm/client';
 import { overpassQuery, parseOverpass, type GolfFeatures } from './osm/parse';
-import { ELEVATION, IMAGERY, fetchRaster, type Bbox, type Raster } from './osm/tiles';
+import { ELEVATION, IMAGERY, decodeImage, fetchRaster, type Bbox, type Raster } from './osm/tiles';
+import { HoleGeometry } from '@shared/schemas';
 
 /** Hole photos from recent previews, kept in the main process until the course is imported. */
 const previewImages = new Map<string, Map<string, HoleImage>>();
@@ -160,4 +161,41 @@ export function holeImagery(db: DB, holeId: number): HoleImagery | null {
     .get(holeId);
   if (!row) return null;
   return { dataUrl: `data:${row.mime};base64,${row.data.toString('base64')}`, bounds: [row.x0, row.y0, row.x1, row.y1], attribution: row.attribution };
+}
+
+/**
+ * Finds trees in the stored aerial photos of a course imported before tree
+ * detection existed. Works offline from the photos already saved; holes
+ * already searched are left alone.
+ */
+export async function detectCourseTrees(db: DB, courseId: number): Promise<{ holes: number; trees: number }> {
+  const rows = db
+    .prepare<[number], { id: number; geometry: string | null; data: Buffer | null; x0: number | null; y0: number | null; x1: number | null; y1: number | null }>(
+      `SELECT h.id, h.geometry, i.data, i.x0, i.y0, i.x1, i.y1
+         FROM hole h LEFT JOIN hole_imagery i ON i.hole_id = h.id
+        WHERE h.course_id = ?`,
+    )
+    .all(courseId);
+  if (rows.length === 0) throw new DomainError('NOT_FOUND', 'That course no longer exists');
+  const save = db.prepare('UPDATE hole SET geometry = ? WHERE id = ?');
+  let holes = 0;
+  let trees = 0;
+  for (const r of rows) {
+    await new Promise((done) => setImmediate(done)); // let the app breathe between holes
+    if (!r.geometry || !r.data || r.x0 === null || r.y0 === null || r.x1 === null || r.y1 === null) continue;
+    const parsed = HoleGeometry.safeParse(JSON.parse(r.geometry));
+    if (!parsed.success || parsed.data.source !== 'map' || !parsed.data.outlines || parsed.data.photoTrees !== undefined) continue;
+    let image: { width: number; height: number; data: Uint8Array };
+    try {
+      image = decodeImage(new Uint8Array(r.data));
+    } catch {
+      continue;
+    }
+    const found = treesFromPhoto(image.data, image.width, image.height, [r.x0, r.y0, r.x1, r.y1], parsed.data.outlines, parsed.data.centerline);
+    const next = HoleGeometry.parse({ ...parsed.data, photoTrees: found });
+    save.run(JSON.stringify(next), r.id);
+    holes++;
+    trees += found.length;
+  }
+  return { holes, trees };
 }

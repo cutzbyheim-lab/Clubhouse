@@ -45,6 +45,16 @@ export const HoleGeometry = z.object({
   /** Mapped individual trees and points sampled inside mapped woods. */
   trees: z.array(Point).max(400).optional(),
   /**
+   * Trees found in the hole's aerial photo: [x, y, crown radius m, height m, kind]
+   * where kind 0 is broadleaf and 1 conifer. Position and crown size are read from
+   * the photo; height is estimated from crown size (it can't be seen from above).
+   * An empty list means the photo was searched and had no trees; absent means not searched.
+   */
+  photoTrees: z
+    .array(z.tuple([z.number().finite(), z.number().finite(), z.number().min(0.5).max(12), z.number().min(1).max(40), z.union([z.literal(0), z.literal(1)])]))
+    .max(1500)
+    .optional(),
+  /**
    * Measured ground height on a regular grid in the hole frame, in metres
    * relative to the tee. Row-major from (x0, y0), `cols` across (+x) and
    * `rows` up (+y). From public elevation data; absent if unavailable.

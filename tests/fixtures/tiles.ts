@@ -45,6 +45,8 @@ export interface PhotoOptions {
   truthShift: P;
   /** Paint bunkers and water? (false = a photo that contradicts the map) */
   hazards: boolean;
+  /** Tree crowns to paint (map metres, before truthShift), radius in metres. */
+  trees?: Array<{ at: P; r: number }>;
 }
 
 function photoTile(features: GolfFeatures, opts: PhotoOptions, z: number, tx: number, ty: number): Buffer {
@@ -64,6 +66,15 @@ function photoTile(features: GolfFeatures, opts: PhotoOptions, z: number, tx: nu
       if (turf.some((poly) => pointInPoly(p, poly))) c = [96, 152, 78];
       if (opts.hazards && water.some((poly) => pointInPoly(p, poly))) c = [38, 66, 92];
       if (opts.hazards && bunkers.some((poly) => pointInPoly(p, poly))) c = [222, 206, 160];
+      for (const t of opts.trees ?? []) {
+        const dx = p[0] - t.at[0], dy = p[1] - t.at[1];
+        if (Math.hypot(dx - 0.5 * t.r, dy + 0.4 * t.r) < t.r * 0.95 && Math.hypot(dx, dy) > t.r) c = [c[0] * 0.55, c[1] * 0.58, c[2] * 0.6];
+        if (Math.hypot(dx, dy) <= t.r) {
+          const k = 0.8 + 0.5 * ((-dx * 0.6 + dy * 0.45) / t.r + 1) * 0.5;
+          const clump = Math.sin(dx * 1.7) * Math.cos(dy * 1.9) * 14;
+          c = [40 * k + clump + noise(), 62 * k + clump + noise(), 34 * k + clump * 0.6 + noise()];
+        }
+      }
       const i = (row * 256 + col) * 4;
       data[i] = Math.max(0, Math.min(255, c[0]));
       data[i + 1] = Math.max(0, Math.min(255, c[1]));

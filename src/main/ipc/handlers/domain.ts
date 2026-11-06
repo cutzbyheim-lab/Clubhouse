@@ -12,7 +12,7 @@ import { listClubSummaries } from '../../services/clubs';
 import { dashboardOverview } from '../../services/dashboard';
 import { listInsights, setDismissed } from '../../services/insights';
 import { performance } from '../../services/performance';
-import { holeImagery, importCourse, previewCourse, searchCourses } from '../../services/courseImport';
+import { detectCourseTrees, holeImagery, importCourse, previewCourse, searchCourses } from '../../services/courseImport';
 import { createHttp, type Http } from '../../services/osm/client';
 import { aiConnect, aiDisconnect, aiSetModel, aiStatus, analyzeBag, latestAnalysis, lookupClub, type AiDeps } from '../../services/ai';
 import { fileKeyStore, memoryKeyStore } from '../../services/ai/keyStore';
@@ -97,6 +97,7 @@ export function registerDomainHandlers(): void {
     if (!found) throw new DomainError('NOT_FOUND', 'Course could not be read back after importing');
     return found;
   });
+  handle('courses.detectTrees', ({ courseId }) => detectCourseTrees(db(), courseId));
   handle('courses.holeImagery', ({ holeId }) => holeImagery(db(), holeId));
   handle('courses.holeRecord', ({ holeId }) => holeRecord(db(), holeId));
 

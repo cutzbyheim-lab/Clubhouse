@@ -37,6 +37,7 @@ export function HoleViewer({
   const [failed, setFailed] = useState<string | null>(null);
   const [photo, setPhoto] = useState<HTMLImageElement | null>(null);
   const [surface, setSurface] = useState<Surface>('photo');
+  const [trees, setTrees] = useState(true);
 
   // Decode the photo once per hole; the scene waits for it rather than flashing the map first.
   useEffect(() => {
@@ -125,7 +126,7 @@ export function HoleViewer({
     if (photoUrl && !photo) return; // photo still decoding
     const keepCamera = handles.current !== null && lastHole.current === holeNumber;
     handles.current?.dispose();
-    const h = buildHoleScene({ geometry, holeNumber, tracks, markers, surface, photo });
+    const h = buildHoleScene({ geometry, holeNumber, tracks, markers, surface, photo, showTrees: trees });
     handles.current = h;
     // Switching surface keeps the camera where the player put it; a new hole starts from the preset.
     if (!keepCamera) {
@@ -137,7 +138,7 @@ export function HoleViewer({
     lastHole.current = holeNumber;
     // `view` is applied by goTo(); the scene shouldn't rebuild on view change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [geometry, holeNumber, tracks, markers, surface, photo, photoUrl]);
+  }, [geometry, holeNumber, tracks, markers, surface, photo, photoUrl, trees]);
 
   const goTo = (next: View) => {
     setView(next);
@@ -164,8 +165,8 @@ export function HoleViewer({
   return (
     <div className="relative h-full w-full overflow-hidden rounded-panel">
       <div ref={mount} className="absolute inset-0" />
-      {photoUrl && (
-        <div className="absolute top-3 left-3">
+      <div className="absolute top-3 left-3 flex items-center gap-2">
+        {photoUrl && (
           <Segmented
             label="Ground"
             value={surface}
@@ -176,8 +177,17 @@ export function HoleViewer({
             ]}
             onChange={setSurface}
           />
-        </div>
-      )}
+        )}
+        <Segmented
+          label="Trees"
+          value={trees ? 'on' : 'off'}
+          options={[
+            { value: 'on', label: '3D trees' },
+            { value: 'off', label: 'No trees' },
+          ]}
+          onChange={(v) => setTrees(v === 'on')}
+        />
+      </div>
       <div className="absolute top-3 right-3">
         <Segmented
           label="Camera"

@@ -4,6 +4,7 @@ import { area, centroid, dist, distToLine, distToPoly, lineLength, open, pointIn
 import type { GolfFeatures } from './parse';
 import { checkHole, findShift, interiorPoints, type Probe } from './photoCheck';
 import { ELEVATION, IMAGERY, encodeJpeg, terrariumHeight, type Raster } from './tiles';
+import { detectTrees, type DetectedTree } from './treeDetect';
 
 export const OSM_ATTRIBUTION = 'Layout © OpenStreetMap contributors (ODbL)';
 
@@ -164,6 +165,8 @@ export function buildPreview(features: GolfFeatures, meta: { osm: OsmRef; name: 
     return h !== null && Number.isFinite(h) && h > -500 && h < 9000 ? h : null;
   };
 
+  const treeCells = new Map<string, P[]>();
+
   let reliefMin = Infinity;
   let reliefMax = -Infinity;
   const previewHoles: PreviewHole[] = [];
@@ -266,6 +269,7 @@ export function buildPreview(features: GolfFeatures, meta: { osm: OsmRef; name: 
 
     // ── Aerial photo of the hole, rotated into the hole frame (row 0 = far end).
     let imageryBounds: [number, number, number, number] | undefined;
+    let photoTrees: DetectedTree[] | undefined;
     if (env.photo) {
       const w = bx1 - bx0;
       const hgt = by1 - by0;
@@ -277,6 +281,17 @@ export function buildPreview(features: GolfFeatures, meta: { osm: OsmRef; name: 
       if (rgba) {
         imageryBounds = [bx0, by0, bx1, by1];
         images.set(h.key, { jpeg: encodeJpeg(width, height, rgba), width, height, bounds: imageryBounds });
+        photoTrees = treesFromPhoto(rgba, width, height, imageryBounds, outlines, centerline);
+        // Neighbouring holes' photos overlap, so count each tree once across the course.
+        for (const t of photoTrees) {
+          const [gx, gy] = fromFrame([t[0], t[1]]);
+          const cx = Math.floor(gx / 6), cy = Math.floor(gy / 6);
+          let seen = false;
+          for (let i = -1; i <= 1 && !seen; i++)
+            for (let j = -1; j <= 1 && !seen; j++)
+              seen = (treeCells.get(`${cx + i},${cy + j}`) ?? []).some(([px, py]) => Math.hypot(px - gx, py - gy) < Math.max(3, t[2]));
+          if (!seen) treeCells.set(`${cx},${cy}`, [...(treeCells.get(`${cx},${cy}`) ?? []), [gx, gy]]);
+        }
       }
     }
 
@@ -292,6 +307,7 @@ export function buildPreview(features: GolfFeatures, meta: { osm: OsmRef; name: 
       source: 'map',
       outlines,
       trees: treePts.slice(0, LIMITS.trees),
+      ...(photoTrees ? { photoTrees } : {}),
       ...(elevation ? { elevation } : {}),
       ...(imageryBounds ? { imageryBounds } : {}),
       check,
@@ -337,6 +353,8 @@ export function buildPreview(features: GolfFeatures, meta: { osm: OsmRef; name: 
     if (count('mismatch')) summary += `, ${count('mismatch')} don't match`;
     summary += '.';
     if (shiftM) summary += ` The map was ${Math.round(Math.hypot(shiftM[0], shiftM[1]))} m off the photo and has been moved to line up.`;
+    const treeCount = [...treeCells.values()].reduce((n, l) => n + l.length, 0);
+    if (treeCount > 0) summary += ` Found about ${treeCount.toLocaleString('en-US')} trees in the photo.`;
     credits.push(IMAGERY.credit);
   }
   const terrainAvailable = previewHoles.some((h) => h.geometry.elevation);
@@ -379,4 +397,25 @@ export function buildPreview(features: GolfFeatures, meta: { osm: OsmRef; name: 
       credits,
     },
   };
+}
+
+/** Trees in a hole's photo, avoiding mapped features and judged against the hole's own turf. */
+export function treesFromPhoto(
+  rgba: Uint8Array,
+  width: number,
+  height: number,
+  bounds: readonly [number, number, number, number],
+  outlines: NonNullable<HoleGeometry['outlines']>,
+  line: readonly (readonly [number, number])[],
+): DetectedTree[] {
+  const result = detectTrees({
+    rgba,
+    width,
+    height,
+    bounds,
+    avoid: [...outlines.greens, ...outlines.tees, ...outlines.fairways, ...outlines.bunkers, ...outlines.water],
+    turf: [...outlines.fairways, ...outlines.greens],
+    line,
+  });
+  return result.reliable ? result.trees : [];
 }

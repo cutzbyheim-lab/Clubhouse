@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { addTrees, photoSampler, type TreeSpot } from './trees3d';
 import type { HoleTrack } from '@shared/dto';
 import type { HoleGeometry } from '@shared/schemas';
 
@@ -12,6 +13,9 @@ import type { HoleGeometry } from '@shared/schemas';
 
 export type Vec2 = readonly [number, number];
 
+/** Where the light comes from; tree shadows on the map surface fall away from it. */
+const SUN = new THREE.Vector3(-120, 200, 80);
+
 const COLORS = {
   sky: 0x1c1f1d,
   rough: 0x1f3a28,
@@ -23,9 +27,6 @@ const COLORS = {
   tee: 0x4b9a62,
   sand: 0xd9c99b,
   water: 0x2a5f80,
-  trunk: 0x6b5440,
-  canopyA: 0x2f6a43,
-  canopyB: 0x3b7a4f,
   flag: 0xc4a35e,
   pin: 0xe8eae3,
 };
@@ -138,6 +139,8 @@ export function buildHoleScene(opts: {
   /** Ground surface for mapped holes. 'photo' and 'both' need `photo`. */
   surface?: Surface;
   photo?: HTMLImageElement | null;
+  /** Draw 3D trees (default true). */
+  showTrees?: boolean;
 }): SceneHandles {
   const { geometry: g, holeNumber, tracks, markers } = opts;
   const photo = opts.photo ?? null;
@@ -316,42 +319,44 @@ export function buildHoleScene(opts: {
     }
   }
 
-  // ── Trees: instanced, kept out of the corridor, hazards and green.
-  {
-    const trunkGeo = track(new THREE.CylinderGeometry(0.35, 0.5, 4, 6));
-    const canopyGeo = track(new THREE.ConeGeometry(3.6, 9, 7));
-    const trunkMat = track(new THREE.MeshLambertMaterial({ color: COLORS.trunk }));
-    const canopyMat = track(new THREE.MeshLambertMaterial({ color: COLORS.canopyA }));
-    // Mapped trees on the map surface only; the aerial photo already shows the real ones.
-    const spots: THREE.Vector3[] = isMap ? (surface === 'map' ? (g.trees ?? []) : []).map(([x, y]) => new THREE.Vector3(x, height(x, -y), -y)) : [];
-    const clearance = g.fairwayWidthM / 2 + 14;
-    for (let i = 0; !isMap && i < 260 && spots.length < 120; i++) {
-      const t = hash(seed + i * 3.1);
-      const p = centre.getPointAt(Math.min(1, t * 1.05));
-      const tan = centre.getTangentAt(Math.min(1, t * 1.05));
-      const side = hash(seed + i * 5.3) < 0.5 ? -1 : 1;
-      const off = clearance + hash(seed + i * 7.9) * 55;
-      const x = p.x - tan.z * off * side;
-      const z = p.z + tan.x * off * side;
-      if (Math.hypot(x - greenC.x, z - greenC.z) < g.green.radiusM + 16) continue;
-      if (Math.hypot(x, z) < 22) continue;
-      if (g.hazards.some((h) => Math.hypot(x - h.center[0], z + h.center[1]) < h.radiusM + 6)) continue;
-      spots.push(new THREE.Vector3(x, height(x, z), z));
+  // ── Trees. Mapped holes: the trees found in the aerial photo (or, for holes not yet
+  // searched, the ones mapped on OpenStreetMap). The sample course gets decorative trees
+  // kept out of the corridor, hazards and green.
+  if (opts.showTrees !== false) {
+    const spots: TreeSpot[] = [];
+    if (isMap) {
+      const sample = photo && g.imageryBounds && surface !== 'map' ? photoSampler(photo, g.imageryBounds) : null;
+      if (g.photoTrees) {
+        for (const [x, y, r, h, kind] of g.photoTrees) spots.push({ x, z: -y, y: height(x, -y), r, h, kind, tint: sample?.(x, y, r) ?? null });
+      } else {
+        for (const [x, y] of g.trees ?? []) spots.push({ x, z: -y, y: height(x, -y), r: 3.5, h: 10, kind: 0, tint: null });
+      }
+    } else {
+      const clearance = g.fairwayWidthM / 2 + 14;
+      for (let i = 0; i < 300 && spots.length < 140; i++) {
+        const t = hash(seed + i * 3.1);
+        const p = centre.getPointAt(Math.min(1, t * 1.05));
+        const tan = centre.getTangentAt(Math.min(1, t * 1.05));
+        const side = hash(seed + i * 5.3) < 0.5 ? -1 : 1;
+        const off = clearance + hash(seed + i * 7.9) * 55;
+        const x = p.x - tan.z * off * side;
+        const z = p.z + tan.x * off * side;
+        if (Math.hypot(x - greenC.x, z - greenC.z) < g.green.radiusM + 16) continue;
+        if (Math.hypot(x, z) < 22) continue;
+        if (g.hazards.some((h) => Math.hypot(x - h.center[0], z + h.center[1]) < h.radiusM + 6)) continue;
+        const r = 2.8 + hash(seed + i * 1.7) * 2.6;
+        spots.push({ x, z, y: height(x, z), r, h: r * 2.5 + 2 + hash(seed + i) * 3, kind: hash(seed + i * 9.1) < 0.3 ? 1 : 0, tint: null });
+      }
     }
-    const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, spots.length);
-    const canopies = new THREE.InstancedMesh(canopyGeo, canopyMat, spots.length);
-    const m = new THREE.Matrix4();
-    const q = new THREE.Quaternion();
-    const tint = new THREE.Color();
-    spots.forEach((s, i) => {
-      const k = 0.8 + hash(seed + i) * 0.7;
-      m.compose(new THREE.Vector3(s.x, s.y + 2 * k, s.z), q, new THREE.Vector3(k, k, k));
-      trunks.setMatrixAt(i, m);
-      m.compose(new THREE.Vector3(s.x, s.y + (4 + 4.5) * k, s.z), q, new THREE.Vector3(k, k, k));
-      canopies.setMatrixAt(i, m);
-      canopies.setColorAt(i, tint.set(hash(seed + i * 2) < 0.5 ? COLORS.canopyA : COLORS.canopyB));
-    });
-    scene.add(trunks, canopies);
+    // Keep the view from behind the tee open: trees between that camera and the tee aren't in play.
+    const back = centre.getTangentAt(0.02);
+    const cam: [number, number] = [-back.x * 70, -back.z * 70]; // scene x, z
+    const clearOfCamera = (t: TreeSpot) => {
+      const len2 = cam[0] * cam[0] + cam[1] * cam[1] || 1;
+      const k = Math.max(0, Math.min(1, (t.x * cam[0] + t.z * cam[1]) / len2));
+      return Math.hypot(t.x - cam[0] * k, t.z - cam[1] * k) > t.r + 9 || k < 0.05;
+    };
+    addTrees(scene, spots.filter(clearOfCamera), track, { sun: SUN, shadows: !isMap || surface === 'map' });
   }
 
   // ── Flag at the pin (end of the most recent track) or green centre.
@@ -432,7 +437,7 @@ export function buildHoleScene(opts: {
   // ── Light
   scene.add(new THREE.HemisphereLight(0xe6efe2, 0x2a3a2f, 1.5));
   const sun = new THREE.DirectionalLight(0xfff3dd, 1.4);
-  sun.position.set(-120, 200, 80);
+  sun.position.copy(SUN);
   scene.add(sun);
   scene.fog = new THREE.Fog(COLORS.sky, length * 0.9, length * 2.6);
 

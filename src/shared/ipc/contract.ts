@@ -116,6 +116,7 @@ export const contract = {
   'courses.search': { input: z.object({ query: z.string().trim().min(2).max(100) }).strict(), output: z.array(CourseSearchResult) },
   'courses.preview': { input: CourseSearchResult.omit({ alreadyImported: true }), output: CoursePreview },
   'courses.import': { input: CourseImport, output: CourseSummary },
+  'courses.detectTrees': { input: z.object({ courseId: Id }).strict(), output: z.object({ holes: z.number().int(), trees: z.number().int() }) },
   'courses.holeImagery': { input: z.object({ holeId: Id }).strict(), output: HoleImagery.nullable() },
   'courses.holeRecord': { input: z.object({ holeId: Id }).strict(), output: HoleRecord },
 
