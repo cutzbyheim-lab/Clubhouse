@@ -1,7 +1,7 @@
-import { net } from 'electron';
+import { net, safeStorage } from 'electron';
 import { getDatabase } from '../../db/connection';
 import { localDate } from '@shared/domain/dates';
-import { deleteClub, saveClub, setBagClubs } from '../../db/repositories/clubs';
+import { deleteClub, saveClub, setBagClubs, setModelInfo } from '../../db/repositories/clubs';
 import { createCourse, getCourse, holeRecord, listCourses } from '../../db/repositories/courses';
 import { createPlan, logPractice, practiceOverview, setPlanStatus } from '../../db/repositories/practice';
 import { getProfile, updateProfile } from '../../db/repositories/profile';
@@ -14,7 +14,21 @@ import { listInsights, setDismissed } from '../../services/insights';
 import { performance } from '../../services/performance';
 import { holeImagery, importCourse, previewCourse, searchCourses } from '../../services/courseImport';
 import { createHttp, type Http } from '../../services/osm/client';
+import { aiConnect, aiDisconnect, aiSetModel, aiStatus, analyzeBag, latestAnalysis, lookupClub, type AiDeps } from '../../services/ai';
+import { fileKeyStore, memoryKeyStore } from '../../services/ai/keyStore';
+import { createAiHttp } from '../../services/ai/openai';
+import { dataDir } from '../../paths';
 import { handle } from '../registry';
+
+const aiDeps = (() => {
+  let deps: AiDeps | null = null;
+  return (): AiDeps =>
+    (deps ??= {
+      http: createAiHttp((url, init) => net.fetch(url, init)),
+      // Headless test runs on machines without a keyring keep the key in memory only.
+      keys: process.env['CLUBHOUSE_TEST_KEYSTORE'] === 'memory' ? memoryKeyStore() : fileKeyStore(dataDir(), safeStorage),
+    });
+})();
 
 // Electron's net.fetch follows the computer's proxy settings, unlike plain fetch.
 let http: Http | null = null;
@@ -32,8 +46,12 @@ export function registerDomainHandlers(): void {
   handle('dashboard.overview', () => dashboardOverview(db()));
 
   handle('clubs.list', () => listClubSummaries(db()));
-  handle('clubs.save', ({ id, club }) => {
-    const savedId = saveClub(db(), id, club);
+  handle('clubs.save', ({ id, club, modelInfo }) => {
+    const savedId = db().transaction(() => {
+      const sid = saveClub(db(), id, club);
+      setModelInfo(db(), sid, modelInfo);
+      return sid;
+    })();
     const found = listClubSummaries(db()).find((c) => c.id === savedId);
     if (!found) throw new DomainError('NOT_FOUND', 'Club could not be read back after saving');
     return found;
@@ -81,6 +99,14 @@ export function registerDomainHandlers(): void {
   });
   handle('courses.holeImagery', ({ holeId }) => holeImagery(db(), holeId));
   handle('courses.holeRecord', ({ holeId }) => holeRecord(db(), holeId));
+
+  handle('ai.status', () => aiStatus(db(), aiDeps()));
+  handle('ai.connect', ({ apiKey }) => aiConnect(db(), aiDeps(), apiKey));
+  handle('ai.disconnect', () => aiDisconnect(db(), aiDeps()));
+  handle('ai.setModel', ({ model }) => aiSetModel(db(), aiDeps(), model));
+  handle('ai.lookupClub', (q) => lookupClub(db(), aiDeps(), q));
+  handle('ai.analysis', () => latestAnalysis(db()));
+  handle('ai.analyzeBag', () => analyzeBag(db(), aiDeps()));
 
   handle('performance.get', () => performance(db()));
 

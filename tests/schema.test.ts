@@ -10,6 +10,7 @@ describe('schema 0001', () => {
       .map((t) => t.name);
     expect(tables).toEqual(
       [
+        'app_setting',
         'bag',
         'bag_club',
         'club',
@@ -21,6 +22,7 @@ describe('schema 0001', () => {
         'hole_imagery',
         'hole_score',
         'insight_dismissal',
+        'player_analysis',
         'player_profile',
         'practice_log',
         'practice_plan',
@@ -31,6 +33,11 @@ describe('schema 0001', () => {
         'shot',
       ].sort(),
     );
+  });
+
+  it('only accepts valid JSON for a club’s model info', () => {
+    const db = freshDb();
+    expect(() => db.prepare("INSERT INTO club (kind, label, model_info) VALUES ('iron', '7 Iron', 'not json')").run()).toThrow(/CHECK/);
   });
 
   it('keeps exactly one player profile row', () => {

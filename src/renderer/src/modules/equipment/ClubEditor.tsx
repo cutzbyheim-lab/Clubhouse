@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react';
-import { ClubInput, CLUB_KINDS, type ClubKind } from '@shared/schemas';
+import { ClubInput, CLUB_KINDS, type ClubKind, type ClubModelInfo } from '@shared/schemas';
 import type { ClubSummary } from '@shared/dto';
 import type { AppError } from '@shared/ipc/result';
 import { Button } from '@/design/Button';
 import { Drawer, Field, Select, TextInput } from '@/design/controls';
 import { mutate } from '@/lib/api';
-import { useUnits } from '@/stores/profile';
+import { useProfile, useUnits } from '@/stores/profile';
+import { ClubFinder, type Applied } from '../bag/ClubFinder';
+import { ClubViewer } from '../bag/three/ClubViewer';
+import { clubSpec } from '../bag/three/clubModel';
 
 const KIND_LABEL: Record<ClubKind, string> = {
   driver: 'Driver',
@@ -51,10 +54,30 @@ function toForm(c: ClubSummary | null, metric: boolean): Form {
 const num = (s: string) => (s.trim() === '' ? null : Number(s));
 const txt = (s: string) => (s.trim() === '' ? null : s.trim());
 
-export function ClubEditor({ club, open, onClose }: { club: ClubSummary | null; open: boolean; onClose: () => void }) {
+/** A typed number inside a range, else null (so the 3D view never draws nonsense). */
+const within = (s: string, lo: number, hi: number) => {
+  const v = num(s);
+  return v !== null && Number.isFinite(v) && v >= lo && v <= hi ? v : null;
+};
+
+export function ClubEditor({
+  club,
+  open,
+  onClose,
+  onSaved,
+}: {
+  club: ClubSummary | null;
+  open: boolean;
+  onClose: () => void;
+  /** Called after a successful save; `identified` when ChatGPT identified the club in this edit. */
+  onSaved?: (r: { identified: boolean }) => void;
+}) {
   const u = useUnits();
+  const leftHanded = useProfile((s) => s.profile?.handedness === 'left');
   const metric = u.du === 'metres';
   const [form, setForm] = useState<Form>(() => toForm(club, metric));
+  const [modelInfo, setModelInfo] = useState<ClubModelInfo | null>(club?.modelInfo ?? null);
+  const [infoTouched, setInfoTouched] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [serverError, setServerError] = useState<AppError | null>(null);
   const [busy, setBusy] = useState(false);
@@ -62,6 +85,8 @@ export function ClubEditor({ club, open, onClose }: { club: ClubSummary | null; 
   useEffect(() => {
     if (open) {
       setForm(toForm(club, metric));
+      setModelInfo(club?.modelInfo ?? null);
+      setInfoTouched(false);
       setErrors({});
       setServerError(null);
     }
@@ -97,11 +122,35 @@ export function ClubEditor({ club, open, onClose }: { club: ClubSummary | null; 
       return;
     }
     setBusy(true);
-    const res = await mutate('clubs.save', { id: club?.id ?? null, club: parsed.data });
+    const res = await mutate('clubs.save', { id: club?.id ?? null, club: parsed.data, ...(infoTouched ? { modelInfo } : {}) });
     setBusy(false);
     if (!res.ok) return setServerError(res.error);
+    onSaved?.({ identified: infoTouched && modelInfo !== null });
     onClose();
   };
+
+  /** Fills the form from the club ChatGPT found; the player can still edit every field before saving. */
+  const applyLookup = ({ info, lookup, option, shaft }: Applied) => {
+    setModelInfo(info);
+    setInfoTouched(true);
+    setForm((f) => {
+      const next = { ...f, kind: lookup.kind, make: info.make, model: info.model };
+      if (!f.label.trim() && info.clubName) next.label = info.clubName.slice(0, 40);
+      if (option?.loftDeg != null) next.loft = String(option.loftDeg);
+      if (option?.lieDeg != null) next.lie = String(option.lieDeg);
+      if (option?.lengthIn != null) next.length = String(Number((metric ? option.lengthIn * 2.54 : option.lengthIn).toFixed(2)));
+      if (option?.swingWeight) next.swingWeight = option.swingWeight;
+      if (shaft) {
+        next.shaftMake = shaft.make;
+        next.shaftModel = shaft.model;
+        if (shaft.weightG !== null) next.shaftWeight = String(Math.round(shaft.weightG));
+        if (shaft.flexes.length === 1 && shaft.flexes[0]) next.shaftFlex = shaft.flexes[0];
+      }
+      return next;
+    });
+  };
+
+  const spec = clubSpec({ kind: form.kind, loftDeg: within(form.loft, 0, 70), lieDeg: within(form.lie, 40, 80), head: modelInfo?.head }, leftHanded);
 
   const remove = async () => {
     if (!club) return;
@@ -117,6 +166,7 @@ export function ClubEditor({ club, open, onClose }: { club: ClubSummary | null; 
   return (
     <Drawer
       open={open}
+      width={600}
       title={club ? `Edit ${club.label}` : 'Add a club'}
       onClose={onClose}
       footer={
@@ -135,6 +185,18 @@ export function ClubEditor({ club, open, onClose }: { club: ClubSummary | null; 
     >
       <div className="flex flex-col gap-5">
         {serverError && <p className="rounded-control border border-hazard/40 bg-hazard/10 px-3 py-2 text-sm text-hazard">{serverError.message}</p>}
+        {open && <ClubViewer spec={spec} height={250} caption={modelInfo ? `${modelInfo.make} ${modelInfo.model}` : 'Generic head for this type'} />}
+        <ClubFinder
+          kind={form.kind}
+          label={form.label}
+          loft={within(form.loft, 0, 70)}
+          current={modelInfo}
+          onApply={applyLookup}
+          onForget={() => {
+            setModelInfo(null);
+            setInfoTouched(true);
+          }}
+        />
         <div className="grid grid-cols-2 gap-3">
           <Field label="Name" error={err('label')}>
             {(id) => <TextInput id={id} value={form.label} onChange={set('label')} placeholder="7 Iron" maxLength={40} />}

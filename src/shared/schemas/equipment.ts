@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ClubModelInfo } from './ai';
 import { Id, IsoDate, IsoTimestamp, Source, measured, optionalText, shortText } from './common';
 
 export const CLUB_KINDS = ['driver', 'wood', 'hybrid', 'iron', 'wedge', 'putter'] as const;
@@ -35,6 +36,8 @@ const retiredAfterAcquired = (c: { acquiredOn: string | null; retiredOn: string 
 export const Club = z.object({
   id: Id,
   ...clubFields,
+  /** What ChatGPT found about this club model; advisory, never a measurement. */
+  modelInfo: ClubModelInfo.nullable(),
   source: Source,
   createdAt: IsoTimestamp,
   updatedAt: IsoTimestamp,

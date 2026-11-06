@@ -23,7 +23,7 @@ import {
   SessionSummary,
   ShotPoint,
 } from '../dto';
-import { Id, PlayerProfile, PlayerProfileUpdate } from '../schemas';
+import { AiStatus, CLUB_KINDS, ClubLookup, Id, PlayerAnalysis, PlayerProfile, PlayerProfileUpdate } from '../schemas';
 
 /**
  * The single IPC contract between renderer and main.
@@ -118,6 +118,23 @@ export const contract = {
   'courses.import': { input: CourseImport, output: CourseSummary },
   'courses.holeImagery': { input: z.object({ holeId: Id }).strict(), output: HoleImagery.nullable() },
   'courses.holeRecord': { input: z.object({ holeId: Id }).strict(), output: HoleRecord },
+
+  'ai.status': { input: Empty, output: AiStatus },
+  'ai.connect': { input: z.object({ apiKey: z.string().trim().min(1).max(400) }).strict(), output: AiStatus },
+  'ai.disconnect': { input: Empty, output: AiStatus },
+  'ai.setModel': { input: z.object({ model: z.string().min(1).max(100) }).strict(), output: AiStatus },
+  'ai.lookupClub': {
+    input: z
+      .object({
+        query: z.string().trim().min(2, 'Type a club, e.g. “TaylorMade Qi10 driver”').max(120),
+        kind: z.enum(CLUB_KINDS).nullable(),
+        label: z.string().trim().max(40).nullable(),
+      })
+      .strict(),
+    output: ClubLookup,
+  },
+  'ai.analysis': { input: Empty, output: PlayerAnalysis.nullable() },
+  'ai.analyzeBag': { input: Empty, output: PlayerAnalysis },
 
   'performance.get': { input: Empty, output: Performance },
 

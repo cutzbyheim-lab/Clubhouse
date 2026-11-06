@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   Club,
   ClubInput,
+  ClubModelInfo,
   CourseDetail,
   DrillCategory,
   FairwayResult,
@@ -57,7 +58,8 @@ export const ClubSummary = Club.extend({
 });
 export type ClubSummary = z.infer<typeof ClubSummary>;
 
-export const ClubSave = z.object({ id: Id.nullable(), club: ClubInput });
+/** `modelInfo` left out keeps whatever the club already has; null clears it. */
+export const ClubSave = z.object({ id: Id.nullable(), club: ClubInput, modelInfo: ClubModelInfo.nullable().optional() });
 export const BagSetClubs = z.object({ clubIds: z.array(Id).max(14) });
 
 // ─── Shots & sessions ───────────────────────────────────────────────────────

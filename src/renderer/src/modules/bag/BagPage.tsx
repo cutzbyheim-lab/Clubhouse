@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
-import { Minus, Plus } from 'lucide-react';
+import { Minus, Plus, Sparkles } from 'lucide-react';
 import type { ClubSummary } from '@shared/dto';
 import type { AppError } from '@shared/ipc/result';
 import { Button } from '@/design/Button';
@@ -8,8 +8,12 @@ import { SampleBadge } from '@/design/controls';
 import { Page, Panel } from '@/design/Page';
 import { QueryView } from '@/design/QueryView';
 import { mutate, useQuery } from '@/lib/api';
-import { useUnits } from '@/stores/profile';
+import { useProfile, useUnits } from '@/stores/profile';
 import { ClubEditor, kindLabel } from '../equipment/ClubEditor';
+import { ChatGptSettings, useAiStatus } from './ChatGpt';
+import { PlayerRead } from './PlayerRead';
+import { clubSpec } from './three/clubModel';
+import { useClubThumb } from './three/thumbs';
 
 const byLoft = (a: ClubSummary, b: ClubSummary) =>
   Number(a.kind === 'putter') - Number(b.kind === 'putter') || (a.loftDeg ?? 99) - (b.loftDeg ?? 99) || a.label.localeCompare(b.label);
@@ -33,6 +37,20 @@ function HeadGlyph({ kind }: { kind: ClubSummary['kind'] }) {
   );
 }
 
+/** Rendered 3D head for a card; the line glyph stands in if this computer can't draw 3D. */
+function ClubThumb({ club }: { club: ClubSummary }) {
+  const left = useProfile((s) => s.profile?.handedness === 'left');
+  const url = useClubThumb(clubSpec({ kind: club.kind, loftDeg: club.loftDeg, lieDeg: club.lieDeg, head: club.modelInfo?.head }, left));
+  if (url === null) {
+    return (
+      <div className="flex h-[92px] items-center justify-center">
+        <HeadGlyph kind={club.kind} />
+      </div>
+    );
+  }
+  return url === undefined ? <div className="h-[92px]" aria-hidden /> : <img src={url} alt="" className="pointer-events-none mx-auto h-[92px] w-[138px] object-contain" draggable={false} />;
+}
+
 function ClubCard({ club, onEdit, onRemove, busy }: { club: ClubSummary; onEdit: () => void; onRemove: () => void; busy: boolean }) {
   const u = useUnits();
   const s = club.stats;
@@ -47,9 +65,17 @@ function ClubCard({ club, onEdit, onRemove, busy }: { club: ClubSummary; onEdit:
             {club.loftDeg !== null && <span className="figures"> · {club.loftDeg}°</span>}
           </div>
         </div>
-        <HeadGlyph kind={club.kind} />
+        {club.modelInfo && (
+          <span title="Identified by ChatGPT" className="mt-1 text-brass">
+            <Sparkles size={13} aria-label="Identified by ChatGPT" />
+          </span>
+        )}
       </div>
-      <div className="mt-4 flex items-end justify-between">
+      <div className="truncate text-[11px] text-ink-faint" title={[club.make, club.model].filter(Boolean).join(' ')}>
+        {club.make || club.model ? [club.make, club.model].filter(Boolean).join(' ') : '\u00a0'}
+      </div>
+      <ClubThumb club={club} />
+      <div className="mt-1 flex items-end justify-between">
         {club.kind === 'putter' ? (
           <span className="text-xs text-ink-faint">Putting stats live in rounds</span>
         ) : s.carryMean !== null ? (
@@ -83,10 +109,24 @@ function ClubCard({ club, onEdit, onRemove, busy }: { club: ClubSummary; onEdit:
 
 export default function BagPage() {
   const clubs = useQuery('clubs.list', {});
+  const ai = useAiStatus();
+  const analysis = useQuery('ai.analysis', {});
   const [editing, setEditing] = useState<ClubSummary | null>(null);
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<AppError | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [reading, setReading] = useState(false);
+  const [readError, setReadError] = useState<AppError | null>(null);
+  const connected = (ai.status === 'ready' || ai.status === 'empty') && ai.data.connected;
+
+  const readBag = async () => {
+    setReading(true);
+    setReadError(null);
+    const res = await mutate('ai.analyzeBag', {});
+    setReading(false);
+    if (!res.ok) setReadError(res.error);
+  };
 
   const setBag = async (ids: number[]) => {
     setBusy(true);
@@ -99,11 +139,16 @@ export default function BagPage() {
   return (
     <Page
       title="Golf bag"
-      lede="The clubs you carry, with your own average carry for each."
+      lede="The clubs you carry, drawn at their real loft and lie, with your own average carry for each."
       actions={
-        <Button variant="primary" onClick={() => setAdding(true)}>
-          <Plus size={15} /> Add club
-        </Button>
+        <>
+          <Button onClick={() => setSettingsOpen(true)}>
+            <Sparkles size={14} className="text-brass" /> ChatGPT{connected ? '' : ': connect'}
+          </Button>
+          <Button variant="primary" onClick={() => setAdding(true)}>
+            <Plus size={15} /> Add club
+          </Button>
+        </>
       }
     >
       <QueryView q={clubs} label="Loading your clubs" onRetry={clubs.reload}>
@@ -115,6 +160,15 @@ export default function BagPage() {
           return (
             <div className="flex flex-col gap-8">
               {error && <p className="text-sm text-hazard">{error.message}</p>}
+              <PlayerRead
+                analysis={analysis.status === 'ready' || analysis.status === 'empty' ? analysis.data : null}
+                connected={connected}
+                busy={reading}
+                error={readError}
+                bagSize={bag.length}
+                onAnalyze={() => void readBag()}
+                onConnect={() => setSettingsOpen(true)}
+              />
               <section>
                 <div className="mb-3 flex items-baseline justify-between">
                   <h2 className="figures text-lg font-semibold">
@@ -181,7 +235,16 @@ export default function BagPage() {
           );
         }}
       </QueryView>
-      <ClubEditor club={editing} open={editing !== null || adding} onClose={() => (setEditing(null), setAdding(false))} />
+      <ClubEditor
+        club={editing}
+        open={editing !== null || adding}
+        onClose={() => (setEditing(null), setAdding(false))}
+        onSaved={({ identified }) => {
+          // A newly identified club changes the picture, so refresh ChatGPT's read straight away.
+          if (identified && connected && !reading) void readBag();
+        }}
+      />
+      <ChatGptSettings open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </Page>
   );
 }

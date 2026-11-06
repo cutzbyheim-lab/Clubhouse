@@ -1,4 +1,4 @@
-import type { Club, ClubInput } from '@shared/schemas';
+import { ClubModelInfo, type Club, type ClubInput } from '@shared/schemas';
 import type { DB } from '../connection';
 import { DomainError } from '../../errors';
 
@@ -20,10 +20,22 @@ export interface ClubRow {
   acquired_on: string | null;
   retired_on: string | null;
   notes: string | null;
+  model_info: string | null;
   source: Club['source'];
   created_at: string;
   updated_at: string;
   slot: number | null;
+}
+
+/** Stored JSON that no longer fits the schema is dropped rather than breaking the bag. */
+function parseModelInfo(raw: string | null): ClubModelInfo | null {
+  if (raw === null) return null;
+  try {
+    const parsed = ClubModelInfo.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
 }
 
 export const toClub = (r: ClubRow): Club => ({
@@ -44,6 +56,7 @@ export const toClub = (r: ClubRow): Club => ({
   acquiredOn: r.acquired_on,
   retiredOn: r.retired_on,
   notes: r.notes,
+  modelInfo: parseModelInfo(r.model_info),
   source: r.source,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
@@ -106,6 +119,12 @@ export function saveClub(db: DB, id: number | null, c: ClubInput): number {
   // A retired club leaves the bag.
   if (c.retiredOn !== null) db.prepare('DELETE FROM bag_club WHERE club_id = ?').run(id);
   return id;
+}
+
+/** undefined leaves it alone; null clears it. */
+export function setModelInfo(db: DB, id: number, info: ClubModelInfo | null | undefined): void {
+  if (info === undefined) return;
+  db.prepare('UPDATE club SET model_info = ? WHERE id = ?').run(info === null ? null : JSON.stringify(info), id);
 }
 
 export function deleteClub(db: DB, id: number): void {
