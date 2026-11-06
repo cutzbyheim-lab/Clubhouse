@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { freshDb, insertClub, insertCourse } from './helpers';
 
 describe('schema 0001', () => {
-  it('creates every domain table', () => {
+  it('creates every domain table (through the latest migration)', () => {
     const db = freshDb();
     const tables = db
       .prepare<[], { name: string }>("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
@@ -18,6 +18,7 @@ describe('schema 0001', () => {
         'drill',
         'hole',
         'hole_length',
+        'hole_imagery',
         'hole_score',
         'insight_dismissal',
         'player_profile',

@@ -6,7 +6,20 @@ type Pt = readonly [number, number];
  * Top-down drawing of a whole course from its mapped outlines: fairways,
  * water, bunkers, greens and each hole's line of play with its number.
  */
-export function CourseMap({ overview, labels, highlight, height = 300 }: { overview: CoursePreview['overview']; labels: Record<string, string>; highlight?: string | null; height?: number }) {
+export function CourseMap({
+  overview,
+  labels,
+  highlight,
+  height = 320,
+  photo,
+}: {
+  overview: CoursePreview['overview'];
+  labels: Record<string, string>;
+  highlight?: string | null;
+  height?: number;
+  /** When given, the photo is drawn underneath and outlines are traced over it instead of filled. */
+  photo?: CoursePreview['photo'];
+}) {
   const pts: Pt[] = [...overview.holes.flatMap((h) => h.line), ...overview.greens.flat(), ...overview.fairways.flat()];
   if (pts.length === 0) {
     return <div className="flex items-center justify-center rounded-panel bg-sunken text-sm text-ink-faint" style={{ height }}>No holes mapped</div>;
@@ -27,18 +40,26 @@ export function CourseMap({ overview, labels, highlight, height = 300 }: { overv
 
   return (
     <svg viewBox={`0 0 ${w} ${h}`} className="w-full rounded-panel bg-[#1a2b20]" style={{ height }} role="img" aria-label="Map of the course's holes">
-      {overview.fairways.map((f, i) => (
-        <path key={`f${i}`} d={path(f)} fill="#3a7a4b" />
-      ))}
-      {overview.water.map((f, i) => (
-        <path key={`w${i}`} d={path(f)} fill="#2a5f80" />
-      ))}
-      {overview.bunkers.map((f, i) => (
-        <path key={`b${i}`} d={path(f)} fill="#d9c99b" />
-      ))}
-      {overview.greens.map((f, i) => (
-        <path key={`g${i}`} d={path(f)} fill="#62b87b" />
-      ))}
+      {photo && (
+        <image
+          href={photo.dataUrl}
+          x={photo.bounds[0] - minX}
+          y={maxY - photo.bounds[3]}
+          width={photo.bounds[2] - photo.bounds[0]}
+          height={photo.bounds[3] - photo.bounds[1]}
+          preserveAspectRatio="none"
+        />
+      )}
+      {(
+        [
+          ['f', overview.fairways, '#3a7a4b', '#a8f0b8'],
+          ['w', overview.water, '#2a5f80', '#7cc8ff'],
+          ['b', overview.bunkers, '#d9c99b', '#ffd66b'],
+          ['g', overview.greens, '#62b87b', '#ffffff'],
+        ] as const
+      ).map(([kind, list, fill, line]) =>
+        list.map((f, i) => <path key={`${kind}${i}`} d={path(f)} fill={photo ? 'none' : fill} stroke={photo ? line : 'none'} strokeWidth={1.4 * k} />),
+      )}
       {overview.holes.map((hole) => {
         const on = highlight === hole.key;
         const start = hole.line[0];

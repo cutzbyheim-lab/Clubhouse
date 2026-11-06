@@ -4,6 +4,8 @@ import { Search } from 'lucide-react';
 import { Button } from '@/design/Button';
 import { CourseFinder } from './CourseFinder';
 import type { CourseDetail, HoleTrack } from '@shared/dto';
+import type { HoleGeometry } from '@shared/schemas';
+import { ShieldAlert, ShieldCheck, ShieldQuestion, ShieldX } from 'lucide-react';
 import { formatToPar } from '@shared/domain/golf';
 import { CAT } from '@/design/charts';
 import { SampleBadge, Select } from '@/design/controls';
@@ -19,10 +21,51 @@ const HoleViewer = lazy(() => import('./HoleViewer').then((m) => ({ default: m.H
 const shortDate = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 const MAX_TRACKS = 4;
 
+const CHECK_META = {
+  match: { label: 'Matches the aerial photo', cls: 'text-green-speed', Icon: ShieldCheck },
+  partial: { label: 'Partly matches the photo', cls: 'text-brass', Icon: ShieldAlert },
+  mismatch: { label: "Doesn't match the photo", cls: 'text-hazard', Icon: ShieldX },
+  unchecked: { label: 'Not checked against a photo', cls: 'text-ink-faint', Icon: ShieldQuestion },
+} as const;
+
+function PhotoCheck({ check }: { check: NonNullable<HoleGeometry['check']> }) {
+  const m = CHECK_META[check.verdict];
+  return (
+    <div className="mt-3 border-t border-rule pt-3">
+      <div className={`flex items-center gap-1.5 text-sm font-medium ${m.cls}`}>
+        <m.Icon size={15} aria-hidden /> {m.label}
+      </div>
+      <p className="mt-1 text-xs text-ink-muted">{check.detail}</p>
+    </div>
+  );
+}
+
+/** Measured height of the green relative to the tee, and the hole's total relief. */
+function Terrain({ geometry }: { geometry: HoleGeometry }) {
+  const u = useUnits();
+  const e = geometry.elevation;
+  if (!e) return null;
+  const feet = u.du === 'yards';
+  const fmt = (m: number) => `${Math.round(Math.abs(feet ? m * 3.2808 : m))} ${feet ? 'ft' : 'm'}`;
+  const rel = geometry.greenElevationM;
+  const relief = Math.max(...e.heights) - Math.min(...e.heights);
+  return (
+    <>
+      <dt className="text-ink-muted">Green vs tee</dt>
+      <dd className="figures text-ink">{Math.abs(rel) < 0.5 ? 'Level' : `${fmt(rel)} ${rel > 0 ? 'uphill' : 'downhill'}`}</dd>
+      <dt className="text-ink-muted">Elevation change</dt>
+      <dd className="figures text-ink">{fmt(relief)}</dd>
+    </>
+  );
+}
+
 function HolePanel({ course, holeIdx, preferRound }: { course: CourseDetail; holeIdx: number; preferRound: number | null }) {
   const u = useUnits();
   const hole = course.holes[holeIdx];
   const record = useQuery('courses.holeRecord', { holeId: hole?.id ?? 0 }, { enabled: !!hole });
+  const wantsPhoto = !!hole?.geometry?.imageryBounds;
+  const imagery = useQuery('courses.holeImagery', { holeId: hole?.id ?? 0 }, { enabled: wantsPhoto });
+  const photo = imagery.status === 'ready' || imagery.status === 'empty' ? imagery.data : null;
   const [chosen, setChosen] = useState<number[] | null>(null);
 
   const tracks = record.status === 'ready' || record.status === 'empty' ? record.data.tracks : [];
@@ -50,14 +93,16 @@ function HolePanel({ course, holeIdx, preferRound }: { course: CourseDetail; hol
   return (
     <div className="grid h-[calc(100vh-250px)] min-h-[560px] grid-cols-[minmax(0,1fr)_300px] gap-6">
       <Panel className="relative overflow-hidden">
-        {hole.geometry ? (
+        {hole.geometry && wantsPhoto && imagery.status === 'loading' ? (
+          <LoadingState label="Loading aerial photo" />
+        ) : hole.geometry ? (
           <>
             <Suspense fallback={<LoadingState label="Preparing 3D view" />}>
-              <HoleViewer geometry={hole.geometry} holeNumber={hole.number} tracks={visible} markers={markers} />
+              <HoleViewer geometry={hole.geometry} holeNumber={hole.number} tracks={visible} markers={markers} photoUrl={photo?.dataUrl ?? null} />
             </Suspense>
             {course.attribution && (
-              <span className="pointer-events-none absolute right-3 bottom-3 rounded-control bg-ground/80 px-2 py-1 text-[11px] text-ink-muted">
-                {course.attribution}
+              <span className="pointer-events-none absolute right-3 bottom-3 max-w-[60%] rounded-control bg-ground/80 px-2 py-1 text-right text-[11px] leading-snug text-ink-muted">
+                {[course.attribution, photo?.attribution, hole.geometry.elevation?.source].filter(Boolean).join(' · ')}
               </span>
             )}
           </>
@@ -90,7 +135,9 @@ function HolePanel({ course, holeIdx, preferRound }: { course: CourseDetail; hol
                 <dd className="figures text-ink">{hole.strokeIndex}</dd>
               </>
             )}
+            {hole.geometry?.elevation && <Terrain geometry={hole.geometry} />}
           </dl>
+          {hole.geometry?.check && <PhotoCheck check={hole.geometry.check} />}
           <QueryView q={record} label="Loading scores">
             {(r) =>
               r.played === 0 ? (

@@ -4,7 +4,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import type { HoleTrack } from '@shared/dto';
 import type { HoleGeometry } from '@shared/schemas';
 import { Segmented } from '@/design/controls';
-import { buildHoleScene, type SceneHandles } from './holeScene';
+import { buildHoleScene, type SceneHandles, type Surface } from './holeScene';
 
 type View = 'tee' | 'overhead' | 'green';
 
@@ -19,18 +19,37 @@ export function HoleViewer({
   holeNumber,
   tracks,
   markers,
+  photoUrl,
 }: {
   geometry: HoleGeometry;
   holeNumber: number;
   tracks: { track: HoleTrack; color: string }[];
   markers: { m: number; label: string }[];
+  /** Aerial photo for the hole (data URL), draped onto the terrain when chosen. */
+  photoUrl?: string | null;
 }) {
   const mount = useRef<HTMLDivElement>(null);
   const engine = useRef<{ renderer: THREE.WebGLRenderer; camera: THREE.PerspectiveCamera; controls: OrbitControls } | null>(null);
   const handles = useRef<SceneHandles | null>(null);
+  const lastHole = useRef<number | null>(null);
   const tween = useRef<{ from: [THREE.Vector3, THREE.Vector3]; to: [THREE.Vector3, THREE.Vector3]; t0: number } | null>(null);
   const [view, setView] = useState<View>('tee');
   const [failed, setFailed] = useState<string | null>(null);
+  const [photo, setPhoto] = useState<HTMLImageElement | null>(null);
+  const [surface, setSurface] = useState<Surface>('photo');
+
+  // Decode the photo once per hole; the scene waits for it rather than flashing the map first.
+  useEffect(() => {
+    setPhoto(null);
+    if (!photoUrl) return;
+    let live = true;
+    const img = new Image();
+    img.onload = () => live && setPhoto(img);
+    img.src = photoUrl;
+    return () => {
+      live = false;
+    };
+  }, [photoUrl]);
 
   // Renderer lifecycle: once per mount.
   useEffect(() => {
@@ -103,16 +122,22 @@ export function HoleViewer({
   useEffect(() => {
     const eng = engine.current;
     if (!eng) return;
+    if (photoUrl && !photo) return; // photo still decoding
+    const keepCamera = handles.current !== null && lastHole.current === holeNumber;
     handles.current?.dispose();
-    const h = buildHoleScene({ geometry, holeNumber, tracks, markers });
+    const h = buildHoleScene({ geometry, holeNumber, tracks, markers, surface, photo });
     handles.current = h;
-    const v = h.views[view];
-    eng.camera.position.copy(v.pos);
-    eng.controls.target.copy(v.target);
-    eng.controls.update();
-    // `view` is applied by the effect below; the scene shouldn't rebuild on view change.
+    // Switching surface keeps the camera where the player put it; a new hole starts from the preset.
+    if (!keepCamera) {
+      const v = h.views[view];
+      eng.camera.position.copy(v.pos);
+      eng.controls.target.copy(v.target);
+      eng.controls.update();
+    }
+    lastHole.current = holeNumber;
+    // `view` is applied by goTo(); the scene shouldn't rebuild on view change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [geometry, holeNumber, tracks, markers]);
+  }, [geometry, holeNumber, tracks, markers, surface, photo, photoUrl]);
 
   const goTo = (next: View) => {
     setView(next);
@@ -139,6 +164,20 @@ export function HoleViewer({
   return (
     <div className="relative h-full w-full overflow-hidden rounded-panel">
       <div ref={mount} className="absolute inset-0" />
+      {photoUrl && (
+        <div className="absolute top-3 left-3">
+          <Segmented
+            label="Ground"
+            value={surface}
+            options={[
+              { value: 'photo', label: 'Photo' },
+              { value: 'both', label: 'Photo + map' },
+              { value: 'map', label: 'Map' },
+            ]}
+            onChange={setSurface}
+          />
+        </div>
+      )}
       <div className="absolute top-3 right-3">
         <Segmented
           label="Camera"

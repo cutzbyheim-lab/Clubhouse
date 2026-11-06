@@ -44,6 +44,32 @@ export const HoleGeometry = z.object({
     .optional(),
   /** Mapped individual trees and points sampled inside mapped woods. */
   trees: z.array(Point).max(400).optional(),
+  /**
+   * Measured ground height on a regular grid in the hole frame, in metres
+   * relative to the tee. Row-major from (x0, y0), `cols` across (+x) and
+   * `rows` up (+y). From public elevation data; absent if unavailable.
+   */
+  elevation: z
+    .object({
+      x0: z.number().finite(),
+      y0: z.number().finite(),
+      stepM: z.number().min(1).max(20),
+      cols: z.number().int().min(2).max(400),
+      rows: z.number().int().min(2).max(400),
+      heights: z.array(z.number().finite().min(-300).max(300)).max(20000),
+      source: z.string().max(120),
+    })
+    .refine((e) => e.heights.length === e.cols * e.rows, 'Elevation grid size mismatch')
+    .optional(),
+  /** Frame-space rectangle the hole's aerial photo covers: [x0, y0, x1, y1]. */
+  imageryBounds: z.tuple([z.number(), z.number(), z.number(), z.number()]).optional(),
+  /** Result of checking the mapped outlines against the aerial photo. */
+  check: z
+    .object({
+      verdict: z.enum(['match', 'partial', 'mismatch', 'unchecked']),
+      detail: z.string().max(300),
+    })
+    .optional(),
 });
 export type HoleGeometry = z.infer<typeof HoleGeometry>;
 

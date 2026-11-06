@@ -1,9 +1,39 @@
-import type { CourseImport, CoursePreview, CourseSearchResult, OsmRef } from '@shared/dto';
+import type { CourseImport, CoursePreview, CourseSearchResult, HoleImagery, OsmRef } from '@shared/dto';
 import type { DB } from '../db/connection';
 import { DomainError } from '../errors';
-import { OSM_ATTRIBUTION, buildPreview } from './osm/build';
+import { OSM_ATTRIBUTION, buildPreview, type HoleImage } from './osm/build';
 import { NOMINATIM, OVERPASS, type Http } from './osm/client';
-import { overpassQuery, parseOverpass } from './osm/parse';
+import { overpassQuery, parseOverpass, type GolfFeatures } from './osm/parse';
+import { ELEVATION, IMAGERY, fetchRaster, type Bbox, type Raster } from './osm/tiles';
+
+/** Hole photos from recent previews, kept in the main process until the course is imported. */
+const previewImages = new Map<string, Map<string, HoleImage>>();
+const rememberImages = (ref: string, images: Map<string, HoleImage>) => {
+  previewImages.delete(ref);
+  previewImages.set(ref, images);
+  while (previewImages.size > 3) previewImages.delete(previewImages.keys().next().value as string);
+};
+
+/** Bounding box of every mapped feature, padded. */
+function featureBbox(f: GolfFeatures, padDeg: number): Bbox | null {
+  const pts = [...f.holes.flatMap((h) => h.line), ...f.greens.flat(), ...f.fairways.flat(), ...f.bunkers.flat(), ...f.tees.flat()];
+  if (pts.length === 0) return null;
+  return {
+    south: Math.min(...pts.map((p) => p.lat)) - padDeg,
+    north: Math.max(...pts.map((p) => p.lat)) + padDeg,
+    west: Math.min(...pts.map((p) => p.lon)) - padDeg,
+    east: Math.max(...pts.map((p) => p.lon)) + padDeg,
+  };
+}
+
+/** Aerial photo for the area: sharpest zoom that the service actually covers. */
+async function fetchPhoto(http: Http, bbox: Bbox): Promise<Raster | null> {
+  for (const zoom of [IMAGERY.zoom, IMAGERY.zoom - 1]) {
+    const r = await fetchRaster(http, bbox, { zoom, url: IMAGERY.url }, { skipBlank: true }).catch(() => null);
+    if (r && r.coverage >= 0.6) return r;
+  }
+  return null;
+}
 
 const refString = (r: OsmRef) => `osm:${r.type}/${r.id}`;
 const MAX_SPAN_DEG = 0.08; // ≈ 8 km: larger than any golf facility
@@ -69,7 +99,15 @@ export async function previewCourse(http: Http, target: Omit<CourseSearchResult,
   for (const endpoint of OVERPASS) {
     try {
       const json = await http.postForm(endpoint, { data: query }, 60_000);
-      return buildPreview(parseOverpass(json), { osm: target.osm, name: target.name, place: target.place });
+      const features = parseOverpass(json);
+      const area = featureBbox(features, 0.0008);
+      // Elevation and photo are extras: if either is unavailable the preview still works without it.
+      const [elevation, photo] = area
+        ? await Promise.all([fetchRaster(http, area, ELEVATION, { skipBlank: false }).catch(() => null), fetchPhoto(http, area)])
+        : [null, null];
+      const { preview, images } = buildPreview(features, { osm: target.osm, name: target.name, place: target.place }, { photo, elevation });
+      rememberImages(refString(target.osm), images);
+      return preview;
     } catch (err) {
       lastError = err; // try the next mirror
     }
@@ -96,10 +134,30 @@ export function importCourse(db: DB, input: CourseImport): number {
     );
     const insHole = db.prepare('INSERT INTO hole (course_id, number, par, stroke_index, geometry) VALUES (?, ?, ?, ?, ?)');
     const insLen = db.prepare('INSERT INTO hole_length (tee_id, hole_id, length_m) VALUES (?, ?, ?)');
+    const insImg = db.prepare(
+      `INSERT INTO hole_imagery (hole_id, mime, width, height, x0, y0, x1, y1, data, attribution)
+       VALUES (?, 'image/jpeg', ?, ?, ?, ?, ?, ?, ?, ?)`,
+    );
+    const photos = previewImages.get(ref);
     for (const h of [...input.holes].sort((a, b) => a.number - b.number)) {
-      const holeId = Number(insHole.run(courseId, h.number, h.par, h.strokeIndex, JSON.stringify(h.geometry)).lastInsertRowid);
+      const img = h.key ? photos?.get(h.key) : undefined;
+      // Keep the geometry's photo bounds only if the photo itself is being saved.
+      const { imageryBounds: _b, ...rest } = h.geometry;
+      const geometry = img ? { ...rest, imageryBounds: img.bounds } : rest;
+      const holeId = Number(insHole.run(courseId, h.number, h.par, h.strokeIndex, JSON.stringify(geometry)).lastInsertRowid);
       if (h.lengthM !== null) insLen.run(teeId, holeId, h.lengthM);
+      if (img) insImg.run(holeId, img.width, img.height, ...img.bounds, img.jpeg, IMAGERY.credit);
     }
     return courseId;
   })();
+}
+
+export function holeImagery(db: DB, holeId: number): HoleImagery | null {
+  const row = db
+    .prepare<[number], { mime: string; x0: number; y0: number; x1: number; y1: number; data: Buffer; attribution: string }>(
+      'SELECT mime, x0, y0, x1, y1, data, attribution FROM hole_imagery WHERE hole_id = ?',
+    )
+    .get(holeId);
+  if (!row) return null;
+  return { dataUrl: `data:${row.mime};base64,${row.data.toString('base64')}`, bounds: [row.x0, row.y0, row.x1, row.y1], attribution: row.attribution };
 }

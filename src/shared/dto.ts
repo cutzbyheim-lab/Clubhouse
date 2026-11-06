@@ -257,6 +257,17 @@ export const CoursePreview = z.object({
   }),
   notes: z.array(z.string()),
   attribution: z.string(),
+  /** Aerial photo of the whole course (north up) covering `bounds` in overview metres. */
+  photo: z.object({ dataUrl: z.string().max(3_000_000), bounds: z.tuple([z.number(), z.number(), z.number(), z.number()]) }).nullable(),
+  /** Outcome of checking the map against the aerial photo. */
+  photoCheck: z.object({
+    available: z.boolean(),
+    /** Shift applied to the map to line it up with the photo, metres east/north; null when none was needed. */
+    shiftM: z.tuple([z.number(), z.number()]).nullable(),
+    summary: z.string(),
+  }),
+  terrain: z.object({ available: z.boolean(), reliefM: z.number().nullable() }),
+  credits: z.array(z.string()),
 });
 export type CoursePreview = z.infer<typeof CoursePreview>;
 
@@ -273,6 +284,8 @@ export const CourseImport = z
     holes: z
       .array(
         z.object({
+          /** Preview hole key, so the main process can attach the hole's aerial photo. */
+          key: z.string().max(40).optional(),
           number: z.number().int().min(1).max(18),
           par: z.number().int().min(3).max(6),
           strokeIndex: z.number().int().min(1).max(18).nullable(),
@@ -292,6 +305,13 @@ export const CourseImport = z
     { message: 'Each stroke index can only be used once', path: ['holes'] },
   );
 export type CourseImport = z.infer<typeof CourseImport>;
+
+export const HoleImagery = z.object({
+  dataUrl: z.string(),
+  bounds: z.tuple([z.number(), z.number(), z.number(), z.number()]),
+  attribution: z.string(),
+});
+export type HoleImagery = z.infer<typeof HoleImagery>;
 
 export const HoleTrack = z.object({
   roundId: Id,

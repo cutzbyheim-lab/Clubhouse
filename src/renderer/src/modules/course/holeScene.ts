@@ -51,14 +51,97 @@ export interface SceneHandles {
   dispose: () => void;
 }
 
+export type Surface = 'map' | 'photo' | 'both';
+
+type Bounds = [number, number, number, number];
+
+/**
+ * Paints the ground texture for a mapped hole: either the mapped features
+ * ('map') or the aerial photo with the map's outlines traced over it ('both'),
+ * so the player can see for themselves whether the map matches the course.
+ * Row 0 of the canvas is the far end (y1), matching the photo's orientation.
+ */
+function paintSurface(g: HoleGeometry, bounds: Bounds, mode: 'map' | 'both', photo: HTMLImageElement | null): HTMLCanvasElement {
+  const [x0, y0, x1, y1] = bounds;
+  const ppm = Math.min(3, 4096 / Math.max(x1 - x0, y1 - y0));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(2, Math.round((x1 - x0) * ppm));
+  canvas.height = Math.max(2, Math.round((y1 - y0) * ppm));
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return canvas;
+  const o = g.outlines ?? { greens: [], tees: [], fairways: [], bunkers: [], water: [] };
+  const trace = (poly: readonly (readonly [number, number])[]) => {
+    ctx.beginPath();
+    poly.forEach(([x, y], i) => (i === 0 ? ctx.moveTo((x - x0) * ppm, (y1 - y) * ppm) : ctx.lineTo((x - x0) * ppm, (y1 - y) * ppm)));
+    ctx.closePath();
+  };
+
+  if (mode === 'both' && photo) {
+    ctx.drawImage(photo, 0, 0, canvas.width, canvas.height);
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = Math.max(2, 0.45 * ppm);
+    const stroke = (list: readonly (readonly (readonly [number, number])[])[], color: string) => {
+      ctx.strokeStyle = color;
+      list.forEach((poly) => (trace(poly), ctx.stroke()));
+    };
+    stroke(o.fairways, '#a8f0b8');
+    stroke(o.water, '#7cc8ff');
+    stroke(o.tees, '#ffffff');
+    stroke(o.bunkers, '#ffd66b');
+    stroke(o.greens, '#ffffff');
+    return canvas;
+  }
+
+  // Rough, with a little texture so the ground doesn't read as plastic.
+  ctx.fillStyle = '#1f3a28';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  for (let i = 0; i < 2600; i++) {
+    ctx.fillStyle = hash(i * 1.7) < 0.5 ? 'rgba(0,0,0,0.07)' : 'rgba(255,255,255,0.035)';
+    const s = (2 + hash(i * 3.3) * 6) * ppm;
+    ctx.fillRect(hash(i * 5.1) * canvas.width, hash(i * 7.9) * canvas.height, s, s);
+  }
+  ctx.fillStyle = '#2a5f80';
+  o.water.forEach((poly) => (trace(poly), ctx.fill()));
+  // Fairways: mowing bands every 7 m across the line of play.
+  for (const poly of o.fairways) {
+    ctx.save();
+    trace(poly);
+    ctx.clip();
+    for (let y = Math.floor(y0 / 7) * 7; y < y1; y += 7) {
+      ctx.fillStyle = Math.round(y / 7) % 2 === 0 ? '#3f8452' : '#397a4b';
+      ctx.fillRect(0, (y1 - y - 7) * ppm, canvas.width, 7 * ppm + 1);
+    }
+    ctx.restore();
+  }
+  ctx.fillStyle = '#4b9a62';
+  o.tees.forEach((poly) => (trace(poly), ctx.fill()));
+  ctx.fillStyle = '#d9c99b';
+  o.bunkers.forEach((poly) => (trace(poly), ctx.fill()));
+  ctx.lineWidth = 2.2 * ppm;
+  ctx.strokeStyle = '#47915d';
+  ctx.fillStyle = '#56aa6f';
+  if (o.greens.length > 0) o.greens.forEach((poly) => (trace(poly), ctx.stroke(), ctx.fill()));
+  else {
+    ctx.beginPath();
+    ctx.arc((g.green.center[0] - x0) * ppm, (y1 - g.green.center[1]) * ppm, g.green.radiusM * ppm, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  return canvas;
+}
+
 export function buildHoleScene(opts: {
   geometry: HoleGeometry;
   holeNumber: number;
   tracks: { track: HoleTrack; color: string }[];
   /** Distance markers from the green centre, in metres, with their display labels. */
   markers: { m: number; label: string }[];
+  /** Ground surface for mapped holes. 'photo' and 'both' need `photo`. */
+  surface?: Surface;
+  photo?: HTMLImageElement | null;
 }): SceneHandles {
   const { geometry: g, holeNumber, tracks, markers } = opts;
+  const photo = opts.photo ?? null;
+  const surface: Surface = photo ? (opts.surface ?? 'photo') : 'map';
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(COLORS.sky);
   const disposables: { dispose: () => void }[] = [];
@@ -68,12 +151,27 @@ export function buildHoleScene(opts: {
   const length = centre.getLength();
   const greenC = new THREE.Vector3(g.green.center[0], 0, -g.green.center[1]);
   const seed = holeNumber * 31.7;
-  /** Real mapped layout: drawn as mapped, on flat ground, with only mapped trees. */
+  /** Real mapped layout: drawn as mapped, on measured terrain (or flat if none), with only mapped trees. */
   const isMap = g.source === 'map' && !!g.outlines;
+  const elev = g.elevation;
 
-  // Terrain height: a ramp from tee (0) to the green's elevation, plus gentle swells.
+  /** Measured ground height at a frame point, bilinear over the elevation grid. */
+  const measured = (fx: number, fy: number): number => {
+    if (!elev) return 0;
+    const cx = (fx - elev.x0) / elev.stepM;
+    const cy = (fy - elev.y0) / elev.stepM;
+    const c0 = Math.max(0, Math.min(elev.cols - 2, Math.floor(cx)));
+    const r0 = Math.max(0, Math.min(elev.rows - 2, Math.floor(cy)));
+    const ax = Math.max(0, Math.min(1, cx - c0));
+    const ay = Math.max(0, Math.min(1, cy - r0));
+    const at = (c: number, r: number) => elev.heights[r * elev.cols + c] ?? 0;
+    return (at(c0, r0) * (1 - ax) + at(c0 + 1, r0) * ax) * (1 - ay) + (at(c0, r0 + 1) * (1 - ax) + at(c0 + 1, r0 + 1) * ax) * ay;
+  };
+
+  // Terrain height. Mapped holes use measured elevation only (flat when there is none);
+  // the generated sample course uses a decorative ramp and swells.
   const height = (x: number, z: number): number => {
-    if (isMap) return 0; // no elevation data for mapped courses, so nothing is invented
+    if (isMap) return measured(x, -z);
     const along = Math.min(1, Math.max(0, -z / Math.max(1, -greenC.z)));
     const ramp = g.greenElevationM * (along * along * (3 - 2 * along));
     const swell = Math.sin(x * 0.021 + seed) * 1.6 + Math.cos(z * 0.017 + seed * 0.7) * 1.3 + Math.sin((x + z) * 0.045 + seed * 1.3) * 0.5;
@@ -87,8 +185,38 @@ export function buildHoleScene(opts: {
   const extentX = Math.max(160, ...g.centerline.map(([x]) => Math.abs(x) + 140), ...outlinePts.map(([x]) => Math.abs(x) + 60));
   const extentZ = length + 220;
 
-  // ── Ground
-  {
+  // ── Ground for mapped holes: measured terrain mesh with the chosen surface draped on it.
+  if (isMap) {
+    const pts = g.outlines ? (Object.values(g.outlines).flat(2) as unknown as [number, number][]) : [];
+    const all = [...pts, ...g.centerline, g.green.center];
+    const bounds: Bounds =
+      g.imageryBounds ??
+      (elev
+        ? [elev.x0, elev.y0, elev.x0 + (elev.cols - 1) * elev.stepM, elev.y0 + (elev.rows - 1) * elev.stepM]
+        : [Math.min(...all.map((p) => p[0])) - 45, Math.min(...all.map((p) => p[1])) - 45, Math.max(...all.map((p) => p[0])) + 45, Math.max(...all.map((p) => p[1])) + 45]);
+    const [bx0, by0, bx1, by1] = bounds;
+    const w = bx1 - bx0;
+    const h = by1 - by0;
+    const step = elev ? Math.max(2, elev.stepM / 2) : Math.max(w, h);
+    const geo = track(new THREE.PlaneGeometry(w, h, Math.min(400, Math.ceil(w / step)), Math.min(400, Math.ceil(h / step))));
+    geo.rotateX(-Math.PI / 2); // local (x, y) → world (x, 0, −y); UV v=1 is the far end
+    geo.translate(bx0 + w / 2, 0, -(by0 + h / 2));
+    const pos = geo.attributes['position'] as THREE.BufferAttribute;
+    for (let i = 0; i < pos.count; i++) pos.setY(i, height(pos.getX(i), pos.getZ(i)));
+    geo.computeVertexNormals();
+    const tex =
+      surface === 'photo' && photo
+        ? track(new THREE.Texture(photo))
+        : track(new THREE.CanvasTexture(paintSurface(g, bounds, surface === 'both' ? 'both' : 'map', photo)));
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 8;
+    tex.needsUpdate = true;
+    const mat = track(new THREE.MeshLambertMaterial({ map: tex }));
+    scene.add(new THREE.Mesh(geo, mat));
+  }
+
+  // ── Ground for the generated sample course
+  if (!isMap) {
     const geo = track(new THREE.PlaneGeometry(extentX * 2, extentZ, 140, 160));
     geo.rotateX(-Math.PI / 2);
     geo.translate(0, 0, -length / 2);
@@ -177,52 +305,7 @@ export function buildHoleScene(opts: {
     return mesh;
   };
 
-  // Flat outline from the map. Layers are separated with polygon offset so they never flicker.
-  const stripes = (() => {
-    const c = document.createElement('canvas');
-    c.width = 2;
-    c.height = 2;
-    const ctx = c.getContext('2d');
-    if (ctx) {
-      ctx.fillStyle = '#3f8452';
-      ctx.fillRect(0, 0, 2, 1);
-      ctx.fillStyle = '#397a4b';
-      ctx.fillRect(0, 1, 2, 1);
-    }
-    const tex = track(new THREE.CanvasTexture(c));
-    tex.wrapS = THREE.RepeatWrapping;
-    tex.wrapT = THREE.RepeatWrapping;
-    tex.magFilter = THREE.NearestFilter;
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.repeat.set(1 / 40, 1 / 14); // mowing bands every 7 m across the line of play
-    return tex;
-  })();
-  const flat = (poly: readonly (readonly [number, number])[], color: number, layer: number, opts?: { shiny?: boolean; striped?: boolean }) => {
-    const shape = new THREE.Shape(poly.map(([x, y]) => new THREE.Vector2(x, y)));
-    const geo = track(new THREE.ShapeGeometry(shape));
-    geo.rotateX(-Math.PI / 2); // shape (x, y) → world (x, 0, −y)
-    geo.translate(0, 0.02 * layer, 0);
-    const common = { side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -layer, polygonOffsetUnits: -4 * layer };
-    const mat = track(
-      opts?.shiny
-        ? new THREE.MeshPhongMaterial({ color, shininess: 90, specular: 0x6688aa, transparent: true, opacity: 0.92, ...common })
-        : opts?.striped
-          ? new THREE.MeshLambertMaterial({ map: stripes, ...common })
-          : new THREE.MeshLambertMaterial({ color, ...common }),
-    );
-    scene.add(new THREE.Mesh(geo, mat));
-  };
-
-  if (isMap && g.outlines) {
-    const o = g.outlines;
-    o.water.forEach((p) => flat(p, COLORS.water, 1, { shiny: true }));
-    o.fairways.forEach((p) => flat(p, COLORS.fairwayA, 2, { striped: true }));
-    o.tees.forEach((p) => flat(p, COLORS.tee, 3));
-    o.bunkers.forEach((p) => flat(p, COLORS.sand, 4));
-    if (o.greens.length > 0) o.greens.forEach((p) => flat(p, COLORS.green, 5));
-    else disc(greenC.x, greenC.z, g.green.radiusM, COLORS.green, 0.12); // green not mapped: plain marker
-    if (o.tees.length === 0) disc(0, -2, 4, COLORS.tee, 0.06);
-  } else {
+  if (!isMap) {
     disc(greenC.x, greenC.z, g.green.radiusM + 2.2, COLORS.fringe, 0.09, 0.06);
     disc(greenC.x, greenC.z, g.green.radiusM, COLORS.green, 0.12, 0.05);
     disc(0, -2, 5, COLORS.tee, 0.1);
@@ -239,7 +322,8 @@ export function buildHoleScene(opts: {
     const canopyGeo = track(new THREE.ConeGeometry(3.6, 9, 7));
     const trunkMat = track(new THREE.MeshLambertMaterial({ color: COLORS.trunk }));
     const canopyMat = track(new THREE.MeshLambertMaterial({ color: COLORS.canopyA }));
-    const spots: THREE.Vector3[] = isMap ? (g.trees ?? []).map(([x, y]) => new THREE.Vector3(x, 0, -y)) : [];
+    // Mapped trees on the map surface only; the aerial photo already shows the real ones.
+    const spots: THREE.Vector3[] = isMap ? (surface === 'map' ? (g.trees ?? []) : []).map(([x, y]) => new THREE.Vector3(x, height(x, -y), -y)) : [];
     const clearance = g.fairwayWidthM / 2 + 14;
     for (let i = 0; !isMap && i < 260 && spots.length < 120; i++) {
       const t = hash(seed + i * 3.1);

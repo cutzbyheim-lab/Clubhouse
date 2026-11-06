@@ -10,7 +10,7 @@ import { freshDb } from './helpers';
 import { nominatimFixture, osmCourseFixture } from './fixtures/osmCourse';
 
 const meta = { osm: { type: 'way' as const, id: 4242 }, name: 'Test Links', place: 'Seattle, Washington' };
-const preview = () => buildPreview(parseOverpass(osmCourseFixture()), meta);
+const preview = () => buildPreview(parseOverpass(osmCourseFixture()), meta).preview;
 
 describe('parsing OpenStreetMap golf data', () => {
   it('reads holes and features and ignores everything else', () => {
@@ -80,7 +80,7 @@ describe('building a preview', () => {
     const empty = buildPreview(
       parseOverpass({ elements: osmCourseFixture().elements.filter((e) => !(e.tags && ('natural' in e.tags))) }),
       meta,
-    );
+    ).preview;
     expect(empty.holes.every((h) => (h.geometry.trees ?? []).length === 0)).toBe(true);
     expect(h3).toBeDefined();
   });
@@ -92,7 +92,7 @@ describe('building a preview', () => {
   });
 
   it('says so plainly when no holes are mapped', () => {
-    const p = buildPreview(parseOverpass({ elements: [] }), meta);
+    const p = buildPreview(parseOverpass({ elements: [] }), meta).preview;
     expect(p.holes).toHaveLength(0);
     expect(p.notes[0]).toMatch(/No holes are mapped/);
   });
@@ -108,6 +108,7 @@ function fakeHttp(responses: { get?: unknown[]; post?: unknown }): Http & { gets
       return queue.shift() ?? [];
     },
     postForm: async () => responses.post,
+    getBuffer: async () => null,
   };
 }
 
@@ -165,7 +166,7 @@ describe('importing', () => {
 });
 
 describe('network errors', () => {
-  const fetchReturning = (status: number) => async () => ({ ok: status < 400, status, json: async () => ({}) });
+  const fetchReturning = (status: number) => async () => ({ ok: status < 400, status, json: async () => ({}), arrayBuffer: async () => new ArrayBuffer(0) });
 
   it('explains a busy service and an unreachable one in plain words', async () => {
     await expect(createHttp(fetchReturning(429)).getJson('https://x.test', 1000)).rejects.toThrow(/busy/);

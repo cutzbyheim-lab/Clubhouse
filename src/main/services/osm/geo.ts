@@ -12,7 +12,13 @@ export function projector(origin: LatLon): (p: LatLon) => P {
   return (p) => [(p.lon - origin.lon) * kx, (p.lat - origin.lat) * M_PER_DEG_LAT];
 }
 
-export const dist = (a: P, b: P): number => Math.hypot(b[0] - a[0], b[1] - a[1]);
+/** Inverse of `projector` for the same origin. */
+export function unprojector(origin: LatLon): (p: P) => LatLon {
+  const kx = M_PER_DEG_LON_EQ * Math.cos((origin.lat * Math.PI) / 180);
+  return ([x, y]) => ({ lat: origin.lat + y / M_PER_DEG_LAT, lon: origin.lon + x / kx });
+}
+
+export const dist =(a: P, b: P): number => Math.hypot(b[0] - a[0], b[1] - a[1]);
 
 export function lineLength(line: readonly P[]): number {
   let s = 0;

@@ -12,7 +12,7 @@ import { listClubSummaries } from '../../services/clubs';
 import { dashboardOverview } from '../../services/dashboard';
 import { listInsights, setDismissed } from '../../services/insights';
 import { performance } from '../../services/performance';
-import { importCourse, previewCourse, searchCourses } from '../../services/courseImport';
+import { holeImagery, importCourse, previewCourse, searchCourses } from '../../services/courseImport';
 import { createHttp, type Http } from '../../services/osm/client';
 import { handle } from '../registry';
 
@@ -79,6 +79,7 @@ export function registerDomainHandlers(): void {
     if (!found) throw new DomainError('NOT_FOUND', 'Course could not be read back after importing');
     return found;
   });
+  handle('courses.holeImagery', ({ holeId }) => holeImagery(db(), holeId));
   handle('courses.holeRecord', ({ holeId }) => holeRecord(db(), holeId));
 
   handle('performance.get', () => performance(db()));
