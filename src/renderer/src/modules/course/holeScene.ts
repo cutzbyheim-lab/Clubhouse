@@ -68,9 +68,12 @@ export function buildHoleScene(opts: {
   const length = centre.getLength();
   const greenC = new THREE.Vector3(g.green.center[0], 0, -g.green.center[1]);
   const seed = holeNumber * 31.7;
+  /** Real mapped layout: drawn as mapped, on flat ground, with only mapped trees. */
+  const isMap = g.source === 'map' && !!g.outlines;
 
   // Terrain height: a ramp from tee (0) to the green's elevation, plus gentle swells.
   const height = (x: number, z: number): number => {
+    if (isMap) return 0; // no elevation data for mapped courses, so nothing is invented
     const along = Math.min(1, Math.max(0, -z / Math.max(1, -greenC.z)));
     const ramp = g.greenElevationM * (along * along * (3 - 2 * along));
     const swell = Math.sin(x * 0.021 + seed) * 1.6 + Math.cos(z * 0.017 + seed * 0.7) * 1.3 + Math.sin((x + z) * 0.045 + seed * 1.3) * 0.5;
@@ -80,7 +83,8 @@ export function buildHoleScene(opts: {
     return ramp + swell * flatten;
   };
 
-  const extentX = Math.max(160, ...g.centerline.map(([x]) => Math.abs(x) + 140));
+  const outlinePts = g.outlines ? Object.values(g.outlines).flat(2) as unknown as [number, number][] : [];
+  const extentX = Math.max(160, ...g.centerline.map(([x]) => Math.abs(x) + 140), ...outlinePts.map(([x]) => Math.abs(x) + 60));
   const extentZ = length + 220;
 
   // ── Ground
@@ -106,8 +110,8 @@ export function buildHoleScene(opts: {
     scene.add(new THREE.Mesh(geo, mat));
   }
 
-  // ── Fairway ribbon with mowing stripes (par 4s and 5s; par 3s get an approach apron)
-  {
+  // ── Fairway ribbon with mowing stripes (generated layouts only; par 3s get an approach apron)
+  if (!isMap) {
     const start = g.centerline.length > 2 || length > 250 ? 0.18 : 0.55;
     const end = 1 - (g.green.radiusM + 2) / length;
     const steps = 120;
@@ -173,13 +177,60 @@ export function buildHoleScene(opts: {
     return mesh;
   };
 
-  disc(greenC.x, greenC.z, g.green.radiusM + 2.2, COLORS.fringe, 0.09, 0.06);
-  disc(greenC.x, greenC.z, g.green.radiusM, COLORS.green, 0.12, 0.05);
-  disc(0, -2, 5, COLORS.tee, 0.1);
-  for (const h of g.hazards) {
-    const [hx, hy] = h.center;
-    if (h.kind === 'bunker') disc(hx, -hy, h.radiusM, COLORS.sand, 0.1, 0.18);
-    else disc(hx, -hy, h.radiusM, COLORS.water, 0.05, 0.12, { shiny: true, opacity: 0.9 });
+  // Flat outline from the map. Layers are separated with polygon offset so they never flicker.
+  const stripes = (() => {
+    const c = document.createElement('canvas');
+    c.width = 2;
+    c.height = 2;
+    const ctx = c.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = '#3f8452';
+      ctx.fillRect(0, 0, 2, 1);
+      ctx.fillStyle = '#397a4b';
+      ctx.fillRect(0, 1, 2, 1);
+    }
+    const tex = track(new THREE.CanvasTexture(c));
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    tex.magFilter = THREE.NearestFilter;
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.repeat.set(1 / 40, 1 / 14); // mowing bands every 7 m across the line of play
+    return tex;
+  })();
+  const flat = (poly: readonly (readonly [number, number])[], color: number, layer: number, opts?: { shiny?: boolean; striped?: boolean }) => {
+    const shape = new THREE.Shape(poly.map(([x, y]) => new THREE.Vector2(x, y)));
+    const geo = track(new THREE.ShapeGeometry(shape));
+    geo.rotateX(-Math.PI / 2); // shape (x, y) → world (x, 0, −y)
+    geo.translate(0, 0.02 * layer, 0);
+    const common = { side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -layer, polygonOffsetUnits: -4 * layer };
+    const mat = track(
+      opts?.shiny
+        ? new THREE.MeshPhongMaterial({ color, shininess: 90, specular: 0x6688aa, transparent: true, opacity: 0.92, ...common })
+        : opts?.striped
+          ? new THREE.MeshLambertMaterial({ map: stripes, ...common })
+          : new THREE.MeshLambertMaterial({ color, ...common }),
+    );
+    scene.add(new THREE.Mesh(geo, mat));
+  };
+
+  if (isMap && g.outlines) {
+    const o = g.outlines;
+    o.water.forEach((p) => flat(p, COLORS.water, 1, { shiny: true }));
+    o.fairways.forEach((p) => flat(p, COLORS.fairwayA, 2, { striped: true }));
+    o.tees.forEach((p) => flat(p, COLORS.tee, 3));
+    o.bunkers.forEach((p) => flat(p, COLORS.sand, 4));
+    if (o.greens.length > 0) o.greens.forEach((p) => flat(p, COLORS.green, 5));
+    else disc(greenC.x, greenC.z, g.green.radiusM, COLORS.green, 0.12); // green not mapped: plain marker
+    if (o.tees.length === 0) disc(0, -2, 4, COLORS.tee, 0.06);
+  } else {
+    disc(greenC.x, greenC.z, g.green.radiusM + 2.2, COLORS.fringe, 0.09, 0.06);
+    disc(greenC.x, greenC.z, g.green.radiusM, COLORS.green, 0.12, 0.05);
+    disc(0, -2, 5, COLORS.tee, 0.1);
+    for (const h of g.hazards) {
+      const [hx, hy] = h.center;
+      if (h.kind === 'bunker') disc(hx, -hy, h.radiusM, COLORS.sand, 0.1, 0.18);
+      else disc(hx, -hy, h.radiusM, COLORS.water, 0.05, 0.12, { shiny: true, opacity: 0.9 });
+    }
   }
 
   // ── Trees: instanced, kept out of the corridor, hazards and green.
@@ -188,9 +239,9 @@ export function buildHoleScene(opts: {
     const canopyGeo = track(new THREE.ConeGeometry(3.6, 9, 7));
     const trunkMat = track(new THREE.MeshLambertMaterial({ color: COLORS.trunk }));
     const canopyMat = track(new THREE.MeshLambertMaterial({ color: COLORS.canopyA }));
-    const spots: THREE.Vector3[] = [];
+    const spots: THREE.Vector3[] = isMap ? (g.trees ?? []).map(([x, y]) => new THREE.Vector3(x, 0, -y)) : [];
     const clearance = g.fairwayWidthM / 2 + 14;
-    for (let i = 0; i < 260 && spots.length < 120; i++) {
+    for (let i = 0; !isMap && i < 260 && spots.length < 120; i++) {
       const t = hash(seed + i * 3.1);
       const p = centre.getPointAt(Math.min(1, t * 1.05));
       const tan = centre.getTangentAt(Math.min(1, t * 1.05));

@@ -1,5 +1,8 @@
 import { lazy, Suspense, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
+import { Search } from 'lucide-react';
+import { Button } from '@/design/Button';
+import { CourseFinder } from './CourseFinder';
 import type { CourseDetail, HoleTrack } from '@shared/dto';
 import { formatToPar } from '@shared/domain/golf';
 import { CAT } from '@/design/charts';
@@ -48,9 +51,16 @@ function HolePanel({ course, holeIdx, preferRound }: { course: CourseDetail; hol
     <div className="grid h-[calc(100vh-250px)] min-h-[560px] grid-cols-[minmax(0,1fr)_300px] gap-6">
       <Panel className="relative overflow-hidden">
         {hole.geometry ? (
-          <Suspense fallback={<LoadingState label="Preparing 3D view" />}>
-            <HoleViewer geometry={hole.geometry} holeNumber={hole.number} tracks={visible} markers={markers} />
-          </Suspense>
+          <>
+            <Suspense fallback={<LoadingState label="Preparing 3D view" />}>
+              <HoleViewer geometry={hole.geometry} holeNumber={hole.number} tracks={visible} markers={markers} />
+            </Suspense>
+            {course.attribution && (
+              <span className="pointer-events-none absolute right-3 bottom-3 rounded-control bg-ground/80 px-2 py-1 text-[11px] text-ink-muted">
+                {course.attribution}
+              </span>
+            )}
+          </>
         ) : (
           <EmptyState title="No layout for this hole">
             <p>
@@ -193,14 +203,31 @@ function CourseView({ courseId, preferRound }: { courseId: number; preferRound: 
 export default function CoursePage() {
   const courses = useQuery('courses.list', {}, { isEmpty: (l) => l.length === 0 });
   const [params, setParams] = useSearchParams();
+  const [finding, setFinding] = useState(false);
+  const navigate = useNavigate();
   const preferRound = params.get('round') ? Number(params.get('round')) : null;
+  const findButton = (
+    <Button variant="primary" onClick={() => setFinding(true)}>
+      <Search size={15} /> Find a course
+    </Button>
+  );
   return (
-    <Page title="Course visualizer" lede="Walk each hole in 3D with your recorded shots laid over it.">
+    <Page title="Course visualizer" lede="Walk each hole in 3D with your recorded shots laid over it." actions={findButton}>
+      <CourseFinder
+        open={finding}
+        onClose={() => setFinding(false)}
+        onImported={(id) => setParams({ course: String(id) })}
+        onManual={() => void navigate('/rounds?new=1')}
+      />
       <QueryView
         q={courses}
         label="Loading courses"
         onRetry={courses.reload}
-        empty={{ title: 'No courses yet', body: <p>Add a course from the Round tracker, or load the sample data to explore a course in 3D.</p> }}
+        empty={{
+          title: 'No courses yet',
+          body: <p>Search for a real course to see its holes in 3D, or load the sample data to explore a demo course.</p>,
+          action: findButton,
+        }}
       >
         {(list) => {
           const selected = list.find((c) => c.id === Number(params.get('course'))) ?? list[0]!;

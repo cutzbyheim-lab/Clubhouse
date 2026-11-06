@@ -8,6 +8,7 @@ export const ERROR_CODES = [
   'NOT_FOUND', // referenced row does not exist
   'CONFLICT', // uniqueness / state conflict
   'DATABASE', // SQLite error
+  'UNAVAILABLE', // an outside service (e.g. map data) couldn't be reached
   'INTERNAL', // anything unexpected
 ] as const;
 

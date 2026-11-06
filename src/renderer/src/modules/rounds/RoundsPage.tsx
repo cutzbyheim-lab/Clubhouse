@@ -11,6 +11,7 @@ import { QueryView } from '@/design/QueryView';
 import { StatTile } from '@/design/StatTile';
 import { EmptyState } from '@/design/StateViews';
 import { mutate, useQuery } from '@/lib/api';
+import { CourseFinder } from '../course/CourseFinder';
 import { CourseEditor } from './CourseEditor';
 import { RoundEntry } from './RoundEntry';
 import { ScoreMixBar, Scorecard } from './Scorecard';
@@ -133,7 +134,8 @@ function RoundView({ id }: { id: number }) {
 export default function RoundsPage() {
   const rounds = useQuery('rounds.list', {});
   const [params, setParams] = useSearchParams();
-  const [courseOpen, setCourseOpen] = useState(false);
+  const [finderOpen, setFinderOpen] = useState(false);
+  const [manualOpen, setManualOpen] = useState(false);
   const entering = params.get('new') === '1';
 
   return (
@@ -149,7 +151,7 @@ export default function RoundsPage() {
       }
     >
       {entering ? (
-        <RoundEntry onDone={(id) => setParams({ id: String(id) })} onCancel={() => setParams({})} onAddCourse={() => setCourseOpen(true)} />
+        <RoundEntry onDone={(id) => setParams({ id: String(id) })} onCancel={() => setParams({})} onAddCourse={() => setFinderOpen(true)} />
       ) : (
         <QueryView q={rounds} label="Loading rounds" onRetry={rounds.reload}>
           {(list) => {
@@ -179,7 +181,8 @@ export default function RoundsPage() {
           }}
         </QueryView>
       )}
-      <CourseEditor open={courseOpen} onClose={() => setCourseOpen(false)} onCreated={() => undefined} />
+      <CourseFinder open={finderOpen} onClose={() => setFinderOpen(false)} onImported={() => undefined} onManual={() => setManualOpen(true)} />
+      <CourseEditor open={manualOpen} onClose={() => setManualOpen(false)} onCreated={() => undefined} />
     </Page>
   );
 }

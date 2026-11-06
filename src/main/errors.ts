@@ -2,7 +2,7 @@
 export class DomainError extends Error {
   override readonly name = 'DomainError';
   constructor(
-    readonly code: 'NOT_FOUND' | 'CONFLICT' | 'VALIDATION',
+    readonly code: 'NOT_FOUND' | 'CONFLICT' | 'VALIDATION' | 'UNAVAILABLE',
     message: string,
   ) {
     super(message);

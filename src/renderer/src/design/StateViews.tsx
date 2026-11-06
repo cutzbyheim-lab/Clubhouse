@@ -6,6 +6,7 @@ const ERROR_GUIDANCE: Record<AppError['code'], string> = {
   NOT_FOUND: 'It may have been deleted. Go back and pick another.',
   CONFLICT: 'Something with the same details already exists.',
   DATABASE: 'Your data file could not be read or written. Your existing data has not been changed.',
+  UNAVAILABLE: 'Nothing on your computer changed. Check your connection and try again.',
   INTERNAL: 'Try again. If it keeps happening, restart Clubhouse.',
 };
 

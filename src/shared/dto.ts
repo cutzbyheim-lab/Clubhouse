@@ -5,6 +5,7 @@ import {
   CourseDetail,
   DrillCategory,
   FairwayResult,
+  HoleGeometry,
   Id,
   IsoDate,
   IsoTimestamp,
@@ -174,6 +175,7 @@ export const CourseSummary = z.object({
   name: z.string(),
   location: z.string().nullable(),
   source: Source,
+  attribution: z.string().nullable(),
   holes: n,
   par: n,
   rounds: n,
@@ -212,6 +214,84 @@ export const CourseCreate = z
     { message: 'Each stroke index can only be used once', path: ['holes'] },
   );
 export type CourseCreate = z.infer<typeof CourseCreate>;
+
+// ─── Real-course search (OpenStreetMap) ─────────────────────────────────────
+
+export const OsmRef = z.object({ type: z.enum(['node', 'way', 'relation']), id: z.number().int().positive() });
+export type OsmRef = z.infer<typeof OsmRef>;
+
+export const CourseSearchResult = z.object({
+  osm: OsmRef,
+  name: z.string(),
+  place: z.string(),
+  /** [south, west, north, east] */
+  bbox: z.tuple([z.number(), z.number(), z.number(), z.number()]),
+  alreadyImported: z.boolean(),
+});
+export type CourseSearchResult = z.infer<typeof CourseSearchResult>;
+
+export const PreviewHole = z.object({
+  key: z.string(),
+  number: z.number().int().min(1).max(18).nullable(),
+  par: z.number().int().min(3).max(6).nullable(),
+  strokeIndex: z.number().int().min(1).max(18).nullable(),
+  /** Measured along the mapped line of play; not a scorecard yardage. */
+  lengthM: z.number().nullable(),
+  geometry: HoleGeometry,
+  has: z.object({ green: z.boolean(), tee: z.boolean(), fairway: z.boolean(), bunkers: n, water: n }),
+});
+export type PreviewHole = z.infer<typeof PreviewHole>;
+
+export const CoursePreview = z.object({
+  osm: OsmRef,
+  name: z.string(),
+  place: z.string(),
+  holes: z.array(PreviewHole),
+  /** Course-wide top-down drawing in metres (east = +x, north = +y). */
+  overview: z.object({
+    holes: z.array(z.object({ key: z.string(), line: z.array(z.tuple([z.number(), z.number()])) })),
+    greens: z.array(z.array(z.tuple([z.number(), z.number()]))),
+    bunkers: z.array(z.array(z.tuple([z.number(), z.number()]))),
+    water: z.array(z.array(z.tuple([z.number(), z.number()]))),
+    fairways: z.array(z.array(z.tuple([z.number(), z.number()]))),
+  }),
+  notes: z.array(z.string()),
+  attribution: z.string(),
+});
+export type CoursePreview = z.infer<typeof CoursePreview>;
+
+export const CourseImport = z
+  .object({
+    osm: OsmRef,
+    name: shortText(100),
+    location: optionalText(120),
+    tee: z.object({
+      name: shortText(40),
+      courseRating: z.number().min(50).max(85).nullable(),
+      slopeRating: z.number().int().min(55).max(155).nullable(),
+    }),
+    holes: z
+      .array(
+        z.object({
+          number: z.number().int().min(1).max(18),
+          par: z.number().int().min(3).max(6),
+          strokeIndex: z.number().int().min(1).max(18).nullable(),
+          lengthM: z.number().min(50).max(750).nullable(),
+          geometry: HoleGeometry,
+        }),
+      )
+      .refine((h) => h.length === 9 || h.length === 18, 'Pick 9 or 18 holes'),
+  })
+  .refine((c) => new Set(c.holes.map((h) => h.number)).size === c.holes.length, { message: 'Each hole number can only be used once', path: ['holes'] })
+  .refine((c) => c.holes.every((h) => h.number <= c.holes.length), { message: 'Hole numbers must run from 1 to the number of holes', path: ['holes'] })
+  .refine(
+    (c) => {
+      const si = c.holes.map((h) => h.strokeIndex).filter((s): s is number => s !== null);
+      return new Set(si).size === si.length;
+    },
+    { message: 'Each stroke index can only be used once', path: ['holes'] },
+  );
+export type CourseImport = z.infer<typeof CourseImport>;
 
 export const HoleTrack = z.object({
   roundId: Id,

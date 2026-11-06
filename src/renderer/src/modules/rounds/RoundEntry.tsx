@@ -123,7 +123,7 @@ function EntryGrid({ courses, onDone, onCancel, onAddCourse }: { courses: Course
       <div className="mb-5 flex items-baseline justify-between">
         <h2 className="figures text-2xl font-semibold">Record a round</h2>
         <button type="button" onClick={onAddCourse} className="text-sm text-green-speed hover:underline">
-          Course not listed? Add it
+          Course not listed? Find it
         </button>
       </div>
       <div className="mb-6 grid grid-cols-[2fr_1fr_1fr_auto_2fr] items-end gap-4">
@@ -251,10 +251,10 @@ export function RoundEntry(props: { onDone: (id: number) => void; onCancel: () =
         list.length === 0 ? (
           <Panel className="p-6">
             <h2 className="figures text-xl font-semibold">Add a course first</h2>
-            <p className="mt-1 max-w-[60ch] text-ink-muted">Rounds are scored against a course's pars. Copy the pars, stroke index and lengths from its scorecard.</p>
+            <p className="mt-1 max-w-[60ch] text-ink-muted">Rounds are scored against a course's pars. Search for your course to bring in its holes and layout, or enter it from the scorecard.</p>
             <div className="mt-4 flex gap-2">
               <Button variant="primary" onClick={props.onAddCourse}>
-                Add a course
+                Find a course
               </Button>
               <Button onClick={props.onCancel}>Cancel</Button>
             </div>

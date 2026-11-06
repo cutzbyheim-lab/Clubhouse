@@ -69,7 +69,7 @@ export const Select = ({ children, ...p }: SelectHTMLAttributes<HTMLSelectElemen
 );
 
 /** Side panel for editing. Esc and backdrop close it; focus moves into it on open. */
-export function Drawer({ open, title, onClose, children, footer }: { open: boolean; title: string; onClose: () => void; children: ReactNode; footer?: ReactNode }) {
+export function Drawer({ open, title, onClose, children, footer, width = 460 }: { open: boolean; title: string; onClose: () => void; children: ReactNode; footer?: ReactNode; width?: number }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
@@ -86,7 +86,7 @@ export function Drawer({ open, title, onClose, children, footer }: { open: boole
   return (
     <div className="fixed inset-0 z-40 flex justify-end">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} aria-hidden />
-      <div ref={ref} role="dialog" aria-modal="true" aria-label={title} className="relative flex h-full w-[460px] flex-col border-l border-rule bg-raised shadow-2xl">
+      <div ref={ref} role="dialog" aria-modal="true" aria-label={title} style={{ width: `min(${width}px, 100vw)` }} className="relative flex h-full flex-col border-l border-rule bg-raised shadow-2xl">
         <div className="flex items-center justify-between border-b border-rule px-6 py-4">
           <h2 className="figures text-xl font-semibold">{title}</h2>
           <button type="button" onClick={onClose} aria-label="Close" className="rounded-control p-1 text-ink-muted hover:bg-overlay hover:text-ink">

@@ -7,9 +7,9 @@ export function listCourses(db: DB): CourseSummary[] {
   const courses = db
     .prepare<
       [],
-      { id: number; name: string; location: string | null; source: CourseSummary['source']; holes: number; par: number; rounds: number }
+      { id: number; name: string; location: string | null; source: CourseSummary['source']; attribution: string | null; holes: number; par: number; rounds: number }
     >(
-      `SELECT c.id, c.name, c.location, c.source,
+      `SELECT c.id, c.name, c.location, c.source, c.attribution,
               (SELECT count(*) FROM hole h WHERE h.course_id = c.id) AS holes,
               (SELECT coalesce(sum(par), 0) FROM hole h WHERE h.course_id = c.id) AS par,
               (SELECT count(*) FROM round r WHERE r.course_id = c.id) AS rounds
@@ -38,8 +38,8 @@ export function listCourses(db: DB): CourseSummary[] {
 
 export function getCourse(db: DB, id: number): CourseDetail {
   const c = db
-    .prepare<[number], { id: number; name: string; location: string | null; notes: string | null; source: CourseDetail['source']; created_at: string }>(
-      'SELECT id, name, location, notes, source, created_at FROM course WHERE id = ?',
+    .prepare<[number], { id: number; name: string; location: string | null; notes: string | null; source: CourseDetail['source']; attribution: string | null; created_at: string }>(
+      'SELECT id, name, location, notes, source, attribution, created_at FROM course WHERE id = ?',
     )
     .get(id);
   if (!c) throw new DomainError('NOT_FOUND', 'That course no longer exists');
@@ -64,6 +64,7 @@ export function getCourse(db: DB, id: number): CourseDetail {
     location: c.location,
     notes: c.notes,
     source: c.source,
+    attribution: c.attribution,
     createdAt: c.created_at,
     tees: tees.map((t) => ({ id: t.id, name: t.name, courseRating: t.course_rating, slopeRating: t.slope_rating })),
     holes: holes.map((h) => {

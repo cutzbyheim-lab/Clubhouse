@@ -1,3 +1,4 @@
+import { net } from 'electron';
 import { getDatabase } from '../../db/connection';
 import { localDate } from '@shared/domain/dates';
 import { deleteClub, saveClub, setBagClubs } from '../../db/repositories/clubs';
@@ -11,7 +12,13 @@ import { listClubSummaries } from '../../services/clubs';
 import { dashboardOverview } from '../../services/dashboard';
 import { listInsights, setDismissed } from '../../services/insights';
 import { performance } from '../../services/performance';
+import { importCourse, previewCourse, searchCourses } from '../../services/courseImport';
+import { createHttp, type Http } from '../../services/osm/client';
 import { handle } from '../registry';
+
+// Electron's net.fetch follows the computer's proxy settings, unlike plain fetch.
+let http: Http | null = null;
+const osmHttp = (): Http => (http ??= createHttp((url, init) => net.fetch(url, init)));
 
 const OK = { ok: true as const };
 const today = () => localDate();
@@ -62,6 +69,14 @@ export function registerDomainHandlers(): void {
     const id = createCourse(db(), input);
     const found = listCourses(db()).find((c) => c.id === id);
     if (!found) throw new DomainError('NOT_FOUND', 'Course could not be read back after saving');
+    return found;
+  });
+  handle('courses.search', ({ query }) => searchCourses(db(), osmHttp(), query));
+  handle('courses.preview', (target) => previewCourse(osmHttp(), target));
+  handle('courses.import', (input) => {
+    const id = importCourse(db(), input);
+    const found = listCourses(db()).find((c) => c.id === id);
+    if (!found) throw new DomainError('NOT_FOUND', 'Course could not be read back after importing');
     return found;
   });
   handle('courses.holeRecord', ({ holeId }) => holeRecord(db(), holeId));
