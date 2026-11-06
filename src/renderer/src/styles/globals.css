@@ -1,0 +1,120 @@
+@import '@fontsource/ibm-plex-sans/400.css';
+@import '@fontsource/ibm-plex-sans/500.css';
+@import '@fontsource/ibm-plex-sans/600.css';
+@import '@fontsource/ibm-plex-sans-condensed/500.css';
+@import '@fontsource/ibm-plex-sans-condensed/600.css';
+@import '@fontsource/ibm-plex-sans-condensed/700.css';
+@import 'tailwindcss';
+
+/*
+ * Clubhouse design tokens.
+ * Charcoal ground, forest-green fairway accent, brass for rare emphasis.
+ * Condensed Plex carries figures and headings — the yardage-book voice.
+ */
+@theme {
+  --color-ground: #1c1f1d;
+  --color-sunken: #171a18;
+  --color-raised: #242825;
+  --color-overlay: #2c312d;
+  --color-rule: #343a35;
+  --color-rule-strong: #46504a;
+
+  --color-fairway: #2e6b47;
+  --color-fairway-deep: #234f36;
+  --color-green-speed: #6fbf8a;
+  --color-brass: #c4a35e;
+  --color-hazard: #d0806a;
+
+  --color-ink: #e8eae3;
+  --color-ink-soft: #b9bfb7;
+  --color-ink-muted: #8c958d;
+  --color-ink-faint: #646d66;
+
+  --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-figure: 'IBM Plex Sans Condensed', 'IBM Plex Sans', system-ui, sans-serif;
+
+  /* Type scale: 1.2 ratio from a 14px desktop base. */
+  --text-2xs: 0.6875rem;
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.875rem;
+  --text-lg: 1.05rem;
+  --text-xl: 1.26rem;
+  --text-2xl: 1.512rem;
+  --text-3xl: 1.815rem;
+  --text-4xl: 2.6rem;
+
+  --radius-control: 6px;
+  --radius-panel: 10px;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  html {
+    color-scheme: dark;
+    font-size: 16px;
+  }
+
+  body {
+    margin: 0;
+    background: var(--color-ground);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: var(--text-base);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+    overflow: hidden;
+  }
+
+  /* Text a golfer might want to copy stays selectable. */
+  input,
+  textarea,
+  [data-selectable] {
+    user-select: text;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-green-speed);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  ::selection {
+    background: var(--color-fairway);
+    color: var(--color-ink);
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-rule);
+    border: 3px solid var(--color-ground);
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+@utility figures {
+  font-family: var(--font-figure);
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: -0.01em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
