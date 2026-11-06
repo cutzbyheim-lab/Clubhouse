@@ -59,6 +59,20 @@ jobs:
         if: steps.version.outputs.release == 'true'
         run: npm run build
 
+      # GitHub only publishes a release for a tag that already exists.
+      - name: Tag this version
+        if: steps.version.outputs.release == 'true'
+        shell: bash
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null; then
+            echo "Tag $TAG already exists."
+          else
+            git tag "$TAG"
+            git push origin "refs/tags/$TAG"
+          fi
+
       - name: Package and publish
         if: steps.version.outputs.release == 'true'
         run: npx electron-builder --win --publish always
